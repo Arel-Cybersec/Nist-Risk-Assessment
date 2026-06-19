@@ -5,81 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NIST Risk Assessment - Interactive 5x5 Matrix</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            background-color: #0d1117;
-            color: #c9d1d9;
-            padding: 40px 20px;
-            max-width: 900px;
-            margin: 0 auto;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; padding: 40px 20px; max-width: 900px; margin: 0 auto; }
         h1 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 10px; }
         .container { display: flex; flex-direction: column; gap: 30px; margin-top: 20px; }
-        
-        /* 5x5 Matrix Layout */
-        .matrix-grid {
-            display: grid;
-            grid-template-columns: 140px repeat(5, 1fr);
-            gap: 8px;
-            background: #161b22;
-            padding: 15px;
-            border-radius: 6px;
-            border: 1px solid #30363d;
-        }
-        .cell {
-            background-color: #21262d;
-            border-radius: 4px;
-            padding: 20px 10px;
-            text-align: center;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, filter 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
+        .matrix-grid { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 8px; background: #161b22; padding: 15px; border-radius: 6px; border: 1px solid #30363d; }
+        .cell { background-color: #21262d; border-radius: 4px; padding: 20px 10px; text-align: center; font-weight: bold; cursor: pointer; transition: transform 0.2s, filter 0.2s; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
         .cell:hover { transform: scale(1.03); filter: brightness(1.2); }
-        
-        /* Headers */
         .header-cell { background: transparent; cursor: default; font-weight: normal; color: #8b949e; }
-        .header-cell:hover { transform: none; filter: none; }
         .label-title { font-weight: bold; color: #58a6ff; }
-
-        /* Risk Categorization Colors */
         .low { background-color: #1e4620; color: #4af626; }
         .medium { background-color: #5c4308; color: #f1e05a; }
         .high { background-color: #6e2d09; color: #ff9e3b; }
         .critical { background-color: #4e1414; color: #ff6b6b; }
-
-        /* Interactivity Output Panel */
-        .output-panel {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 20px;
-            min-height: 100px;
-        }
+        .output-panel { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px; }
         .output-title { color: #58a6ff; margin-top: 0; font-size: 1.2rem; }
-        .vuln-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-family: monospace;
-            margin-top: 5px;
-        }
+        pre { background: #0d1117; padding: 15px; border-radius: 4px; border: 1px solid #30363d; overflow-x: auto; font-family: monospace; }
+        .vuln-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-family: monospace; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <h1>NIST Risk Assessment Interactive Matrix</h1>
-    <p>Click on any intersection inside the 5x5 matrix grid below to analyze the mapped cloud vulnerability data, likelihood scores, and remediation priorities.</p>
+    <p>Click on any mapped coordinate block inside the 5x5 grid below to pull live infrastructure logs from your automated compliance scanner.</p>
 
     <div class="container">
-        <!-- Matrix Grid Configuration -->
         <div class="matrix-grid">
-            <!-- Top Column Headers -->
             <div class="header-cell label-title">L \ I</div>
             <div class="header-cell">1 - Insignificant</div>
             <div class="header-cell">2 - Minor</div>
@@ -87,67 +37,48 @@
             <div class="header-cell">4 - Major</div>
             <div class="header-cell">5 - Critical</div>
 
-            <!-- Row 5 -->
             <div class="header-cell label-title">5 - Almost Certain</div>
-            <div class="cell medium" onclick="showRisk('Medium', 5, 'No assigned assets.')">5</div>
-            <div class="cell high" onclick="showRisk('High', 10, 'No assigned assets.')">10</div>
-            <div class="cell high" onclick="showRisk('High', 15, 'No assigned assets.')">15</div>
-            <div class="cell critical" onclick="showRisk('Critical', 20, 'No assigned assets.')">20</div>
-            <div class="cell critical" onclick="showRisk('Critical', 25, 'No assigned assets.')">25</div>
+            <div class="cell medium" onclick="clearConsole()">5</div><div class="cell high" onclick="clearConsole()">10</div><div class="cell high" onclick="clearConsole()">15</div><div class="cell critical" onclick="clearConsole()">20</div><div class="cell critical" onclick="clearConsole()">25</div>
 
-            <!-- Row 4 -->
             <div class="header-cell label-title">4 - Likely</div>
-            <div class="cell low" onclick="showRisk('Low', 4, 'No assigned assets.')">4</div>
-            <div class="cell medium" onclick="showRisk('Medium', 8, 'No assigned assets.')">8</div>
-            <div class="cell high" onclick="showRisk('High', 12, 'No assigned assets.')">12</div>
-            <div class="cell critical" onclick="showRisk('Critical', 16, 'No assigned assets.')">16</div>
-            <div class="cell critical" onclick="showRisk('Critical', 20, 'Vulnerability: Public SSH Port 22 Open<br><br><b>Context:</b> main.tf allows ingress traffic from 0.0.0.0/0. Highly vulnerable to automated malicious scanning scripts.', 'critical', 'main.tf')">20 (SSH)</div>
+            <div class="cell low" onclick="clearConsole()">4</div><div class="cell medium" onclick="clearConsole()">8</div><div class="cell high" onclick="clearConsole()">12</div><div class="cell critical" onclick="clearConsole()">16</div>
+            <div class="cell critical" onclick="showRisk('Critical', 20, 'Scanning main.tf...\n [!] CRITICAL: Port exposed to the public internet (F-05) on line 35: cidr_blocks = [\&quot;0.0.0.0/0\&quot;]\n [!] CRITICAL: Port exposed to the public internet (F-05) on line 43: cidr_blocks = [\&quot;0.0.0.0/0\&quot;]\n\n=== SCAN COMPLETE ===', 'critical', 'main.tf')">20 (SSH)</div>
 
-            <!-- Row 3 -->
             <div class="header-cell label-title">3 - Possible</div>
-            <div class="cell low" onclick="showRisk('Low', 3, 'No assigned assets.')">3</div>
-            <div class="cell medium" onclick="showRisk('Medium', 6, 'No assigned assets.')">6</div>
-            <div class="cell medium" onclick="showRisk('Medium', 9, 'No assigned assets.')">9</div>
-            <div class="cell high" onclick="showRisk('High', 12, 'Vulnerability: Over-permissive IAM Roles<br><br><b>Context:</b> iam.tf grants broad administrative resource control wildcards. High threat matrix if standard developer roles leak administrative tokens.', 'high', 'iam.tf')">12 (IAM)</div>
-            <div class="cell critical" onclick="showRisk('Critical', 15, 'No assigned assets.')">15</div>
+            <div class="cell low" onclick="clearConsole()">3</div><div class="cell medium" onclick="clearConsole()">6</div><div class="cell medium" onclick="clearConsole()">9</div>
+            <div class="cell high" onclick="showRisk('High', 12, 'Scanning iam.tf...\n [!] HIGH: Wildcard administrative permissions granted (F-02) on line 35: Resource = \&quot;*\&quot;\n\n=== SCAN COMPLETE ===', 'high', 'iam.tf')">12 (IAM)</div>
+            <div class="cell critical" onclick="clearConsole()">15</div>
 
-            <!-- Row 2 -->
             <div class="header-cell label-title">2 - Unlikely</div>
-            <div class="cell low" onclick="showRisk('Low', 2, 'No assigned assets.')">2</div>
-            <div class="cell low" onclick="showRisk('Low', 4, 'No assigned assets.')">4</div>
-            <div class="cell medium" onclick="showRisk('Medium', 6, 'Vulnerability: Public S3 Bucket Storage<br><br><b>Context:</b> s3.tf leaves access open to global principles. Mitigated slightly because finding exact bucket string paths lowers absolute access likelihood.', 'medium', 's3.tf')">6 (S3)</div>
-            <div class="cell high" onclick="showRisk('High', 8, 'No assigned assets.')">8</div>
-            <div class="cell high" onclick="showRisk('High', 10, 'No assigned assets.')">10</div>
+            <div class="cell low" onclick="clearConsole()">2</div><div class="cell low" onclick="clearConsole()">4</div>
+            <div class="cell medium" onclick="showRisk('Medium', 6, 'Scanning s3.tf...\n [!] HIGH: Wildcard administrative permissions granted (F-02) on line 21: # Secure Bucket Policy: Restricting access to a specific internal IAM Role instead of \&quot;*\&quot;\n\n=== SCAN COMPLETE ===', 'medium', 's3.tf')">6 (S3)</div>
+            <div class="cell high" onclick="clearConsole()">8</div><div class="cell high" onclick="clearConsole()">10</div>
 
-            <!-- Row 1 -->
             <div class="header-cell label-title">1 - Rare</div>
-            <div class="cell low" onclick="showRisk('Low', 1, 'No assigned assets.')">1</div>
-            <div class="cell low" onclick="showRisk('Low', 2, 'No assigned assets.')">2</div>
-            <div class="cell low" onclick="showRisk('Low', 3, 'No assigned assets.')">3</div>
-            <div class="cell medium" onclick="showRisk('Medium', 4, 'No assigned assets.')">4</div>
-            <div class="cell medium" onclick="showRisk('Medium', 5, 'No assigned assets.')">5</div>
+            <div class="cell low" onclick="clearConsole()">1</div><div class="cell low" onclick="clearConsole()">2</div><div class="cell low" onclick="clearConsole()">3</div><div class="cell medium" onclick="clearConsole()">4</div><div class="cell medium" onclick="clearConsole()">5</div>
         </div>
 
-        <!-- Dynamic Output Console Details -->
-        <div class="output-panel" id="riskPanel">
+        <div class="output-panel">
             <h3 class="output-title">Asset Evaluation Console</h3>
-            <p id="riskDescription">Click any numbered coordinate block inside the matrix grid above to pull live infrastructure data from your NIST deployment configuration.</p>
-            <div id="fileBadge"></div>
+            <div id="riskContent">
+                <p>Click a labeled block in the matrix grid (like SSH, IAM, or S3) to pipe the terminal audit strings here...</p>
+            </div>
         </div>
     </div>
 
     <script>
-        function showRisk(tier, score, details, badgeClass = '', filename = '') {
-            const descriptionBox = document.getElementById('riskDescription');
-            const badgeBox = document.getElementById('fileBadge');
-            
-            descriptionBox.innerHTML = `<strong>Risk Classification Tier:</strong> ${tier} (Calculated Score: ${score})<br><br>${details}`;
-            
-            if(filename) {
-                badgeBox.innerHTML = `<span class="vuln-badge ${badgeClass}">Target Infrastructure Module: ${filename}</span>`;
-            } else {
-                badgeBox.innerHTML = '';
-            }
+        function showRisk(tier, score, logText, badgeClass, filename) {
+            const content = document.getElementById('riskContent');
+            content.innerHTML = `
+                <p><strong>Risk Classification Tier:</strong> ${tier} (Calculated Score: ${score})</p>
+                <pre style="color: #ff6b6b;">${logText}</pre>
+                <span class="vuln-badge ${badgeClass}">Target Infrastructure Module: ${filename}</span>
+            `;
+        }
+        function clearConsole() {
+            document.getElementById('riskContent').innerHTML = `
+                <p style="color: #8b949e;"><em>No compliance violations mapped to this risk coordinate coordinate block. Check your labeled target modules.</em></p>
+            `;
         }
     </script>
 </body>
