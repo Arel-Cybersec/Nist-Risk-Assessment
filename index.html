@@ -1,85 +1,643 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIST Risk Assessment - Interactive 5x5 Matrix</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; padding: 40px 20px; max-width: 900px; margin: 0 auto; }
-        h1 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 10px; }
-        .container { display: flex; flex-direction: column; gap: 30px; margin-top: 20px; }
-        .matrix-grid { display: grid; grid-template-columns: 140px repeat(5, 1fr); gap: 8px; background: #161b22; padding: 15px; border-radius: 6px; border: 1px solid #30363d; }
-        .cell { background-color: #21262d; border-radius: 4px; padding: 20px 10px; text-align: center; font-weight: bold; cursor: pointer; transition: transform 0.2s, filter 0.2s; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
-        .cell:hover { transform: scale(1.03); filter: brightness(1.2); }
-        .header-cell { background: transparent; cursor: default; font-weight: normal; color: #8b949e; }
-        .label-title { font-weight: bold; color: #58a6ff; }
-        .low { background-color: #1e4620; color: #4af626; }
-        .medium { background-color: #5c4308; color: #f1e05a; }
-        .high { background-color: #6e2d09; color: #ff9e3b; }
-        .critical { background-color: #4e1414; color: #ff6b6b; }
-        .output-panel { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px; }
-        .output-title { color: #58a6ff; margin-top: 0; font-size: 1.2rem; }
-        pre { background: #0d1117; padding: 15px; border-radius: 4px; border: 1px solid #30363d; overflow-x: auto; font-family: monospace; }
-        .vuln-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-family: monospace; margin-top: 10px; }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SENTINEL // NIST 5×5 Risk Targeting Module</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #09090b;
+    --panel: #18181b;
+    --line: #27272a;
+    --muted: #71717a;
+    --text: #f4f4f5;
+    --cyan: #06b6d4;
+    --amber: #f59e0b;
+    --orange: #f97316;
+    --red: #ef4444;
+    --emerald: #10b981;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  ::selection { background: rgba(6,182,212,0.3); color: var(--cyan); }
+
+  @keyframes scanline { 0% { transform: translateY(-100%);} 100% { transform: translateY(100%);} }
+  @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(6,182,212,0.5);} 100% { box-shadow: 0 0 0 12px rgba(6,182,212,0);} }
+  @keyframes pulse-dot { 0%,100% { opacity:1;} 50% { opacity:.3;} }
+  @keyframes fade-in { from { opacity:0; transform: translateY(8px);} to { opacity:1; transform: translateY(0);} }
+  @keyframes flash { 0% { transform: scale(1);} 50% { transform: scale(1.08);} 100% { transform: scale(1);} }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid rgba(39,42,46,0.6);
+    background: rgba(9,9,11,0.85);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .header-inner {
+    max-width: 1280px; margin: 0 auto;
+    padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .h-left { display: flex; align-items: center; gap: 16px; }
+  .dot-pulse {
+    position: relative; width: 8px; height: 8px;
+    background: var(--cyan); border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+  }
+  .dot-pulse::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    animation: pulse-ring 1.6s ease-out infinite;
+  }
+  .h-title {
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: #a1a1aa; margin: 0;
+  }
+  .h-title .slash { color: var(--cyan); }
+  .h-meta { display: flex; gap: 32px; font-size: 10px; color: #71717a; text-transform: uppercase; letter-spacing: -0.02em; }
+  .h-meta .clock { color: var(--cyan); }
+  @media (max-width: 768px) { .h-meta { display: none; } }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 40px 24px 96px; }
+
+  .grid-main { display: grid; grid-template-columns: 1fr; gap: 32px; }
+  @media (min-width: 1024px) { .grid-main { grid-template-columns: 1fr 2fr; } }
+
+  /* Section header */
+  .section-head { margin-bottom: 16px; }
+  .section-head .tag { font-size: 10px; color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500; }
+  .section-head h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 6px 0; }
+  .section-head p { font-size: 14px; color: #a1a1aa; line-height: 1.55; margin: 0; max-width: 52ch; }
+
+  .col-left { display: flex; flex-direction: column; gap: 32px; }
+
+  /* Likelihood buttons */
+  .like-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .like-btn {
+    height: 56px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--panel); color: var(--text);
+    border: none; box-shadow: inset 0 0 0 1px var(--line);
+    cursor: pointer; transition: all .2s;
+    font-family: inherit;
+  }
+  .like-btn:hover { box-shadow: inset 0 0 0 1px rgba(6,182,212,0.6); background: rgba(39,42,46,0.6); }
+  .like-btn.active {
+    background: var(--cyan); color: var(--bg);
+    box-shadow: inset 0 0 0 1px var(--cyan), 0 0 18px rgba(6,182,212,0.45);
+  }
+  .like-btn .code { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #71717a; }
+  .like-btn.active .code { color: rgba(9,9,11,0.7); }
+  .like-btn .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  .desc-box { font-size: 12px; color: #a1a1aa; border-left: 1px solid rgba(6,182,212,0.5); padding-left: 12px; line-height: 1.55; animation: fade-in .3s; }
+  .desc-box.hidden { display: none; }
+
+  /* Impact buttons */
+  .impact-list { display: flex; flex-direction: column; gap: 8px; }
+  .impact-btn {
+    width: 100%; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--panel); color: #d4d4d8;
+    border: none; box-shadow: inset 0 0 0 1px var(--line);
+    cursor: pointer; text-align: left;
+    font-family: inherit; transition: all .2s;
+  }
+  .impact-btn:hover { box-shadow: inset 0 0 0 1px rgba(6,182,212,0.4); }
+  .impact-btn.active { background: #27272a; box-shadow: inset 0 0 0 1px rgba(6,182,212,0.6); color: var(--cyan); }
+  .impact-btn .lbl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .impact-btn .lbl .sep { opacity: 0.5; margin: 0 6px; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px #3f3f46; display: flex; align-items: center; justify-content: center; }
+  .impact-btn.active .radio { box-shadow: inset 0 0 0 2px var(--cyan); }
+  .radio-dot { width: 6px; height: 6px; background: var(--cyan); border-radius: 50%; display: none; }
+  .impact-btn.active .radio-dot { display: block; }
+
+  /* Buttons row */
+  .actions { display: flex; gap: 8px; padding-top: 8px; }
+  .exec-btn {
+    flex: 1; background: var(--cyan); color: var(--bg);
+    border: none; padding: 16px 24px;
+    font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.22em;
+    cursor: pointer; position: relative; overflow: hidden;
+    font-family: inherit;
+  }
+  .exec-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .exec-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,255,255,0.25);
+    transform: translateY(100%); transition: transform .3s;
+  }
+  .exec-btn:not(:disabled):hover::before { transform: translateY(0); }
+  .exec-btn span { position: relative; }
+  .reset-btn {
+    padding: 0 16px; background: transparent; color: #a1a1aa;
+    border: none; box-shadow: inset 0 0 0 1px var(--line);
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;
+    transition: all .2s;
+  }
+  .reset-btn:hover { color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(6,182,212,0.5); }
+  .reset-btn.hidden { display: none; }
+
+  /* Right column - matrix */
+  .matrix-wrap {
+    position: relative;
+    background: rgba(24,24,27,0.5); box-shadow: inset 0 0 0 1px var(--line);
+    padding: 24px; overflow: hidden;
+  }
+  @media (min-width: 1024px) { .matrix-wrap { padding: 32px; } }
+  .scan {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, rgba(6,182,212,0.06), transparent);
+    animation: scanline 8s linear infinite;
+  }
+  .matrix-head { position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .matrix-head .left { display: flex; align-items: center; gap: 12px; }
+  .matrix-head .tag { font-size: 10px; color: var(--cyan); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.22em; }
+  .matrix-head .sub { font-size: 10px; color: #52525b; font-family: 'JetBrains Mono', monospace; }
+  .dots { display: flex; gap: 6px; }
+  .dots span { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* Matrix grid */
+  .matrix-outer { position: relative; }
+  .matrix-row { display: flex; }
+  .yaxis { padding-right: 12px; display: flex; align-items: center; }
+  .yaxis span { writing-mode: vertical-rl; transform: rotate(180deg); font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #52525b; text-transform: uppercase; letter-spacing: 0.3em; }
+  .matrix-grid {
+    flex: 1;
+    display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+    gap: 4px; border-left: 1px solid rgba(63,63,70,0.5); border-bottom: 1px solid rgba(63,63,70,0.5);
+    aspect-ratio: 1.15 / 1;
+  }
+  .cell {
+    position: relative; box-shadow: inset 0 0 0 1px rgba(113,113,122,0.2);
+    display: flex; align-items: center; justify-content: center;
+    transition: all .3s; opacity: 1;
+  }
+  .cell .num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(113,113,122,0.7); }
+  .cell.tone-low { background: rgba(39,42,46,0.3); }
+  .cell.tone-mod { background: rgba(245,158,11,0.12); box-shadow: inset 0 0 0 1px rgba(245,158,11,0.25); }
+  .cell.tone-high { background: rgba(249,115,22,0.15); box-shadow: inset 0 0 0 1px rgba(249,115,22,0.3); }
+  .cell.tone-vhigh { background: rgba(239,68,68,0.15); box-shadow: inset 0 0 0 1px rgba(239,68,68,0.3); }
+  .cell.tone-crit { background: rgba(239,68,68,0.25); box-shadow: inset 0 0 0 1px rgba(239,68,68,0.4); }
+  .cell.dim { opacity: 0.55; }
+  .cell.selected { box-shadow: inset 0 0 0 2px var(--cyan); animation: flash .5s; }
+  .cell.selected .num { color: white; }
+  .reticle { position: absolute; width: 8px; height: 8px; border: 0 solid var(--cyan); }
+  .reticle.tl { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+  .reticle.tr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+  .reticle.bl { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+  .reticle.br { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+
+  .xaxis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 8px; padding-left: 26px; }
+  .xaxis div { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #52525b; text-transform: uppercase; letter-spacing: 0.1em; }
+  .xaxis div.active { color: var(--cyan); }
+  .xaxis-label { display: flex; justify-content: flex-end; margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #52525b; text-transform: uppercase; letter-spacing: 0.3em; }
+
+  /* Telemetry */
+  .telemetry {
+    margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px;
+    display: grid; grid-template-columns: 1fr; gap: 24px;
+  }
+  @media (min-width: 768px) { .telemetry { grid-template-columns: 1fr 1fr; align-items: end; } .telemetry .right { text-align: right; } }
+  .label-sm { font-size: 10px; color: #71717a; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; }
+  .score-row { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; }
+  .score { font-size: 60px; font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #52525b; line-height: 1; }
+  .score.t-low { color: var(--emerald); } .score.t-mod { color: var(--amber); } .score.t-high { color: var(--orange); } .score.t-crit { color: var(--red); }
+  .tier-pill {
+    padding: 3px 8px; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: -0.02em; color: var(--bg);
+    animation: fade-in .3s;
+  }
+  .tier-pill.t-low { background: var(--emerald); } .tier-pill.t-mod { background: var(--amber); } .tier-pill.t-high { background: var(--orange); } .tier-pill.t-crit { background: var(--red); }
+  .tier-pill.hidden { display: none; }
+  .formula { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #d4d4d8; margin-top: 8px; }
+
+  /* Log */
+  .log {
+    margin-top: 24px; background: rgba(0,0,0,0.5); box-shadow: inset 0 0 0 1px var(--line);
+    padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    line-height: 1.55; height: 160px; overflow: hidden; position: relative;
+  }
+  .log-indicators { position: absolute; top: 8px; right: 12px; display: flex; gap: 4px; }
+  .log-indicators span { width: 4px; height: 4px; background: #3f3f46; }
+  .log-indicators span.on { background: var(--cyan); }
+  .log-indicators span.done { background: var(--emerald); }
+  .log-indicators span.pulse { animation: pulse-dot 1.2s infinite; }
+  .log-empty { color: #52525b; font-style: italic; }
+  .log-line { animation: fade-in .25s; }
+  .log-line .ts, .log-line .tag { color: #52525b; }
+  .log-line.tone-sys { color: #71717a; }
+  .log-line.tone-data { color: #a1a1aa; }
+  .log-line.tone-intel { color: var(--cyan); }
+  .log-line.tone-eval { color: #d4d4d8; }
+  .log-line.tone-ok { color: #34d399; }
+  .log-line.tone-alert { color: var(--red); animation: pulse-dot 1s infinite; }
+  .log::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; pointer-events: none;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); }
+
+  /* Supplemental panels */
+  .panels { margin-top: 56px; display: grid; grid-template-columns: 1fr; gap: 24px; animation: fade-in .5s; }
+  @media (min-width: 768px) { .panels { grid-template-columns: repeat(3, 1fr); } }
+  .panels.hidden { display: none; }
+  .panel { padding: 24px; background: rgba(24,24,27,0.3); box-shadow: inset 0 0 0 1px rgba(39,42,46,0.6); }
+  .panel .label-sm { display: block; margin-bottom: 16px; letter-spacing: 0.1em; }
+  .bar { height: 4px; background: #27272a; border-radius: 2px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0; transition: width .8s ease-out; }
+  .bar-fill.t-low { background: var(--emerald); } .bar-fill.t-mod { background: var(--amber); } .bar-fill.t-high { background: var(--orange); } .bar-fill.t-crit { background: var(--red); }
+  .panel p { font-size: 12px; color: #a1a1aa; line-height: 1.55; margin: 16px 0 0; }
+  .protocol-code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e4e4e7; }
+  .attach { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--cyan); }
+  .attach-box { width: 12px; height: 12px; box-shadow: inset 0 0 0 1px rgba(6,182,212,0.5); display: flex; align-items: center; justify-content: center; }
+  .attach-box i { width: 4px; height: 4px; background: var(--cyan); display: block; }
+
+  /* Footer */
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(9,9,11,0.95); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+    padding: 8px 24px; z-index: 40;
+  }
+  .footer-inner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .status-group { display: flex; gap: 24px; }
+  .status { display: flex; align-items: center; gap: 8px; }
+  .status .dot { width: 6px; height: 6px; border-radius: 50%; animation: pulse-dot 2s infinite; }
+  .status .dot.emerald { background: var(--emerald); }
+  .status .dot.cyan { background: var(--cyan); }
+  .status .dot.amber { background: var(--amber); }
+  .status .dot.gray { background: #52525b; animation: none; }
+  .status .lbl { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #71717a; text-transform: uppercase; letter-spacing: 0.1em; }
+  .footer-meta { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #52525b; text-transform: uppercase; letter-spacing: 0.1em; }
+</style>
 </head>
 <body>
 
-    <h1>NIST Risk Assessment Interactive Matrix</h1>
-    <p>Click on any mapped coordinate block inside the 5x5 grid below to pull live infrastructure logs from your automated compliance scanner.</p>
+<header>
+  <div class="header-inner">
+    <div class="h-left">
+      <div class="dot-pulse"></div>
+      <h1 class="h-title">Sentinel<span class="slash">/</span>Risk_Targeting_Module_v4.2</h1>
+    </div>
+    <div class="h-meta mono">
+      <span>Lat 38.8977°N</span>
+      <span>Lng 77.0365°W</span>
+      <span>Enc AES-256-GCM</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </div>
+</header>
 
-    <div class="container">
-        <div class="matrix-grid">
-            <div class="header-cell label-title">L \ I</div>
-            <div class="header-cell">1 - Insignificant</div>
-            <div class="header-cell">2 - Minor</div>
-            <div class="header-cell">3 - Moderate</div>
-            <div class="header-cell">4 - Major</div>
-            <div class="header-cell">5 - Critical</div>
-
-            <div class="header-cell label-title">5 - Almost Certain</div>
-            <div class="cell medium" onclick="clearConsole()">5</div><div class="cell high" onclick="clearConsole()">10</div><div class="cell high" onclick="clearConsole()">15</div><div class="cell critical" onclick="clearConsole()">20</div><div class="cell critical" onclick="clearConsole()">25</div>
-
-            <div class="header-cell label-title">4 - Likely</div>
-            <div class="cell low" onclick="clearConsole()">4</div><div class="cell medium" onclick="clearConsole()">8</div><div class="cell high" onclick="clearConsole()">12</div><div class="cell critical" onclick="clearConsole()">16</div>
-            <div class="cell critical" onclick="showRisk('Critical', 20, 'Scanning main.tf...\n [!] CRITICAL: Port exposed to the public internet (F-05) on line 35: cidr_blocks = [\&quot;0.0.0.0/0\&quot;]\n [!] CRITICAL: Port exposed to the public internet (F-05) on line 43: cidr_blocks = [\&quot;0.0.0.0/0\&quot;]\n\n=== SCAN COMPLETE ===', 'critical', 'main.tf')">20 (SSH)</div>
-
-            <div class="header-cell label-title">3 - Possible</div>
-            <div class="cell low" onclick="clearConsole()">3</div><div class="cell medium" onclick="clearConsole()">6</div><div class="cell medium" onclick="clearConsole()">9</div>
-            <div class="cell high" onclick="showRisk('High', 12, 'Scanning iam.tf...\n [!] HIGH: Wildcard administrative permissions granted (F-02) on line 35: Resource = \&quot;*\&quot;\n\n=== SCAN COMPLETE ===', 'high', 'iam.tf')">12 (IAM)</div>
-            <div class="cell critical" onclick="clearConsole()">15</div>
-
-            <div class="header-cell label-title">2 - Unlikely</div>
-            <div class="cell low" onclick="clearConsole()">2</div><div class="cell low" onclick="clearConsole()">4</div>
-            <div class="cell medium" onclick="showRisk('Medium', 6, 'Scanning s3.tf...\n [!] HIGH: Wildcard administrative permissions granted (F-02) on line 21: # Secure Bucket Policy: Restricting access to a specific internal IAM Role instead of \&quot;*\&quot;\n\n=== SCAN COMPLETE ===', 'medium', 's3.tf')">6 (S3)</div>
-            <div class="cell high" onclick="clearConsole()">8</div><div class="cell high" onclick="clearConsole()">10</div>
-
-            <div class="header-cell label-title">1 - Rare</div>
-            <div class="cell low" onclick="clearConsole()">1</div><div class="cell low" onclick="clearConsole()">2</div><div class="cell low" onclick="clearConsole()">3</div><div class="cell medium" onclick="clearConsole()">4</div><div class="cell medium" onclick="clearConsole()">5</div>
+<main>
+  <div class="grid-main">
+    <!-- LEFT -->
+    <div class="col-left">
+      <div>
+        <div class="section-head">
+          <div class="tag mono">Input Set 01</div>
+          <h2>Likelihood Factor</h2>
+          <p>Frequency of threat event occurrence based on historical telemetry and vector analysis.</p>
         </div>
+        <div class="like-grid" id="likeGrid"></div>
+        <div class="desc-box hidden" id="likeDesc" style="margin-top:16px;"></div>
+      </div>
 
-        <div class="output-panel">
-            <h3 class="output-title">Asset Evaluation Console</h3>
-            <div id="riskContent">
-                <p>Click a labeled block in the matrix grid (like SSH, IAM, or S3) to pipe the terminal audit strings here...</p>
-            </div>
+      <div>
+        <div class="section-head">
+          <div class="tag mono">Input Set 02</div>
+          <h2>Impact Severity</h2>
+          <p>Quantified damage to organizational integrity, fiscal assets, and operational continuity.</p>
         </div>
+        <div class="impact-list" id="impactList"></div>
+      </div>
+
+      <div class="actions">
+        <button class="exec-btn" id="execBtn" disabled><span id="execLbl">Execute Calculation</span></button>
+        <button class="reset-btn hidden" id="resetBtn">Reset</button>
+      </div>
     </div>
 
-    <script>
-        function showRisk(tier, score, logText, badgeClass, filename) {
-            const content = document.getElementById('riskContent');
-            content.innerHTML = `
-                <p><strong>Risk Classification Tier:</strong> ${tier} (Calculated Score: ${score})</p>
-                <pre style="color: #ff6b6b;">${logText}</pre>
-                <span class="vuln-badge ${badgeClass}">Target Infrastructure Module: ${filename}</span>
-            `;
-        }
-        function clearConsole() {
-            document.getElementById('riskContent').innerHTML = `
-                <p style="color: #8b949e;"><em>No compliance violations mapped to this risk coordinate coordinate block. Check your labeled target modules.</em></p>
-            `;
-        }
-    </script>
+    <!-- RIGHT -->
+    <div>
+      <div class="matrix-wrap">
+        <div class="scan"></div>
+        <div class="matrix-head">
+          <div class="left">
+            <span class="tag mono">Risk Coordinate Matrix</span>
+            <span class="sub mono">NIST_SP_800-30 / 5×5</span>
+          </div>
+          <div class="dots">
+            <span style="background: var(--red);"></span>
+            <span style="background: var(--amber);"></span>
+            <span style="background: var(--emerald);"></span>
+          </div>
+        </div>
+
+        <div class="matrix-outer">
+          <div class="matrix-row">
+            <div class="yaxis"><span>Impact →</span></div>
+            <div class="matrix-grid" id="matrix"></div>
+          </div>
+          <div class="xaxis" id="xaxis"></div>
+          <div class="xaxis-label">Likelihood →</div>
+        </div>
+
+        <div class="telemetry">
+          <div>
+            <span class="label-sm">Computed Output</span>
+            <div class="score-row">
+              <span class="score mono" id="score">00</span>
+              <span class="tier-pill hidden" id="tierPill">—</span>
+            </div>
+          </div>
+          <div class="right">
+            <span class="label-sm">Formula_Breakdown</span>
+            <p class="formula" id="formula">L(00) × I(00) = Σ 00.00</p>
+          </div>
+        </div>
+
+        <div class="log">
+          <div class="log-indicators">
+            <span id="ind1"></span><span id="ind2"></span><span id="ind3"></span>
+          </div>
+          <div id="logBody"><div class="log-empty">// awaiting parameters · execute calculation to stream evidence</div></div>
+        </div>
+      </div>
+
+      <section class="panels hidden" id="panels">
+        <div class="panel">
+          <span class="label-sm">Resource Impact</span>
+          <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+          <p id="resourceText"></p>
+        </div>
+        <div class="panel">
+          <span class="label-sm">Response Protocol</span>
+          <p class="protocol-code" id="protoCode">—</p>
+          <p id="protoText"></p>
+        </div>
+        <div class="panel">
+          <span class="label-sm">Audit Evidence</span>
+          <div class="attach"><div class="attach-box"><i></i></div><span id="attachName">ATTACHMENT_0000_LOGS.ZIP</span></div>
+          <p>Encrypted packet captures from the primary ingress gateway during the peak of the observed event.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="status-group">
+      <div class="status"><span class="dot emerald"></span><span class="lbl">Core_Stable</span></div>
+      <div class="status"><span class="dot cyan"></span><span class="lbl">Link_Active</span></div>
+      <div class="status"><span class="dot gray" id="phaseDot"></span><span class="lbl" id="phaseLbl">Idle</span></div>
+    </div>
+    <div class="footer-meta">Terminal_Session 8829-001-ALPHA // Clock <span id="clock2">--:--:--</span></div>
+  </div>
+</footer>
+
+<script>
+const LIKELIHOOD = [
+  { v:1, code:"01", label:"Rare",     desc:"Incredibly low probability. No active exploit vectors observed in current threat intelligence." },
+  { v:2, code:"02", label:"Unlikely", desc:"Requires highly specific misconfigurations. No recent telemetry indicates active reconnaissance." },
+  { v:3, code:"03", label:"Likely",   desc:"Standard target conditions met. Comparable events logged across peer infrastructure in last 90 days." },
+  { v:4, code:"04", label:"Frequent", desc:"Highly vulnerable environment. Multiple incidents recorded against this surface in current fiscal cycle." },
+  { v:5, code:"05", label:"Certain",  desc:"Active exploit vectors confirmed. Event already observed multiple times in monitored telemetry." },
+];
+const IMPACT = [
+  { v:1, label:"Insignificant" },
+  { v:2, label:"Minor" },
+  { v:3, label:"Moderate" },
+  { v:4, label:"Significant Material Loss" },
+  { v:5, label:"Catastrophic Failure" },
+];
+
+let likelihood = null, impact = null, phase = "idle", timers = [];
+
+function tierFor(s) {
+  if (s >= 20) return { key:"crit", label:"Critical_Threat" };
+  if (s >= 12) return { key:"high", label:"High_Risk" };
+  if (s >= 6)  return { key:"mod",  label:"Moderate" };
+  return { key:"low", label:"Low_Risk" };
+}
+function cellTone(s) {
+  if (s >= 20) return "tone-crit";
+  if (s >= 15) return "tone-vhigh";
+  if (s >= 10) return "tone-high";
+  if (s >= 6)  return "tone-mod";
+  return "tone-low";
+}
+function pad(n){return String(n).padStart(2,"0");}
+function nowClock(){const d=new Date();return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;}
+
+// Clock
+setInterval(() => {
+  const t = nowClock();
+  document.getElementById("clock").textContent = t;
+  document.getElementById("clock2").textContent = t;
+}, 1000);
+document.getElementById("clock").textContent = nowClock();
+document.getElementById("clock2").textContent = nowClock();
+
+// Build likelihood buttons
+const likeGrid = document.getElementById("likeGrid");
+LIKELIHOOD.forEach(o => {
+  const b = document.createElement("button");
+  b.className = "like-btn"; b.dataset.v = o.v;
+  b.innerHTML = `<span class="code">${o.code}</span><span class="lbl">${o.label}</span>`;
+  b.onclick = () => { likelihood = o.v; renderInputs(); };
+  likeGrid.appendChild(b);
+});
+
+// Build impact buttons
+const impactList = document.getElementById("impactList");
+IMPACT.forEach(o => {
+  const b = document.createElement("button");
+  b.className = "impact-btn"; b.dataset.v = o.v;
+  b.innerHTML = `<span class="lbl">0${o.v}<span class="sep">•</span>${o.label}</span><div class="radio"><div class="radio-dot"></div></div>`;
+  b.onclick = () => { impact = o.v; renderInputs(); };
+  impactList.appendChild(b);
+});
+
+// Build matrix
+const matrix = document.getElementById("matrix");
+const xaxis = document.getElementById("xaxis");
+const rows = [5,4,3,2,1], cols = [1,2,3,4,5];
+rows.forEach(r => cols.forEach(c => {
+  const s = r * c;
+  const div = document.createElement("div");
+  div.className = `cell ${cellTone(s)}`;
+  div.dataset.r = r; div.dataset.c = c;
+  div.innerHTML = `<span class="num">${pad(s)}</span>`;
+  matrix.appendChild(div);
+}));
+cols.forEach(c => {
+  const d = document.createElement("div");
+  d.dataset.c = c; d.textContent = `L${c}`;
+  xaxis.appendChild(d);
+});
+
+function renderInputs() {
+  // likelihood active
+  document.querySelectorAll(".like-btn").forEach(b => {
+    b.classList.toggle("active", Number(b.dataset.v) === likelihood);
+  });
+  const desc = document.getElementById("likeDesc");
+  if (likelihood) { desc.textContent = LIKELIHOOD[likelihood-1].desc; desc.classList.remove("hidden"); }
+  else desc.classList.add("hidden");
+
+  // impact active
+  document.querySelectorAll(".impact-btn").forEach(b => {
+    b.classList.toggle("active", Number(b.dataset.v) === impact);
+  });
+
+  // matrix highlight (live before execute)
+  document.querySelectorAll(".cell").forEach(c => {
+    const r = +c.dataset.r, col = +c.dataset.c;
+    const sel = (col === likelihood && r === impact);
+    c.classList.toggle("selected", sel);
+    c.classList.toggle("dim", !!(likelihood && impact) && !(col === likelihood || r === impact));
+    // reticles
+    c.querySelectorAll(".reticle").forEach(x => x.remove());
+    if (sel) {
+      ["tl","tr","bl","br"].forEach(p => { const r=document.createElement("div"); r.className=`reticle ${p}`; c.appendChild(r); });
+    }
+  });
+  document.querySelectorAll("#xaxis div").forEach(d => d.classList.toggle("active", +d.dataset.c === likelihood));
+
+  // formula live
+  const s = (likelihood && impact) ? likelihood * impact : 0;
+  document.getElementById("formula").innerHTML = `L(${pad(likelihood||0)}) × I(${pad(impact||0)}) = Σ ${pad(s)}.00`;
+
+  // exec button
+  document.getElementById("execBtn").disabled = !(likelihood && impact) || phase === "arming";
+}
+
+// Execute
+function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+
+document.getElementById("execBtn").onclick = () => {
+  if (!likelihood || !impact) return;
+  clearTimers();
+  phase = "arming";
+  document.getElementById("execLbl").textContent = "Computing…";
+  document.getElementById("execBtn").disabled = true;
+  document.getElementById("resetBtn").classList.remove("hidden");
+  document.getElementById("phaseDot").className = "dot amber";
+  document.getElementById("phaseLbl").textContent = "Computing";
+
+  const s = likelihood * impact;
+  const t = tierFor(s);
+  const stream = [
+    { tag:"SYS",   tone:"tone-sys",   text:"INITIALIZING_RISK_COORDINATES..." },
+    { tag:"DATA",  tone:"tone-data",  text:`MAPPING VECTOR: LIKELIHOOD_${pad(likelihood)} × IMPACT_${pad(impact)}` },
+    { tag:"DATA",  tone:"tone-data",  text:"DETECTING CORE_INFRASTRUCTURE_EXPOSURE..." },
+    { tag:"INTEL", tone:"tone-intel", text:`EVIDENCE_LOCKED: CVE-2024-${Math.floor(10000 + Math.random()*89999)}` },
+    { tag:"EVAL",  tone:"tone-eval",  text:`NIST_SP_800-30 CROSS-REFERENCE: TIER ${t.label.toUpperCase()}` },
+    { tag: s>=20 ? "ALERT":"OK", tone: s>=20 ? "tone-alert":"tone-ok",
+      text: s>=20 ? "CRITICAL_VARIANCE_DETECTED: MAX_LOAD" : "CALCULATION COMPLETE. STANDBY FOR VALIDATION." },
+    { tag:"SYS",   tone:"tone-sys",   text:`AUDIT_HASH: 0x${Math.random().toString(16).slice(2,10)}...${Math.random().toString(16).slice(2,6)}` },
+  ];
+
+  document.getElementById("logBody").innerHTML = "";
+  document.getElementById("ind1").className = "pulse on";
+  document.getElementById("ind2").className = "";
+  document.getElementById("ind3").className = "";
+
+  stream.forEach((line, i) => {
+    const timer = setTimeout(() => {
+      const div = document.createElement("div");
+      div.className = `log-line ${line.tone}`;
+      const ts = nowClock();
+      div.innerHTML = `<span class="ts">[${ts}]</span> <span class="tag">[${line.tag}]</span> ${line.text}`;
+      document.getElementById("logBody").appendChild(div);
+      if (i === 2) document.getElementById("ind2").className = "on";
+      if (i === stream.length - 1) {
+        document.getElementById("ind3").className = "done";
+        finalize(s, t);
+      }
+    }, 220 + i * 260);
+    timers.push(timer);
+  });
+};
+
+function finalize(s, t) {
+  phase = "result";
+  document.getElementById("execLbl").textContent = "Execute Calculation";
+  document.getElementById("phaseDot").className = "dot gray";
+  document.getElementById("phaseLbl").textContent = "Idle";
+
+  // animate score
+  const scoreEl = document.getElementById("score");
+  scoreEl.className = `score mono t-${t.key}`;
+  animateCount(scoreEl, 0, s, 600);
+
+  const pill = document.getElementById("tierPill");
+  pill.className = `tier-pill t-${t.key}`;
+  pill.textContent = t.label;
+
+  // panels
+  const panels = document.getElementById("panels");
+  panels.classList.remove("hidden");
+  const fill = document.getElementById("barFill");
+  fill.className = `bar-fill t-${t.key}`;
+  setTimeout(() => fill.style.width = `${(s/25)*100}%`, 30);
+
+  document.getElementById("resourceText").textContent =
+    s >= 20 ? "Projected costs exceed tier-4 contingency budgets. Insurance escalation recommended." :
+    s >= 12 ? "Material remediation budget required within current operating window." :
+    s >= 6  ? "Standard mitigation playbook applies. Monitor weekly." :
+              "Within accepted tolerance. Log for quarterly audit only.";
+
+  document.getElementById("protoCode").textContent =
+    s >= 20 ? "DEFCON_2_ELEVATION_REQUIRED" :
+    s >= 12 ? "DEFCON_3_ACTIVE_MITIGATION" :
+    s >= 6  ? "DEFCON_4_MONITORED" : "DEFCON_5_NOMINAL";
+
+  document.getElementById("protoText").textContent =
+    s >= 20 ? "Immediate isolation of affected segments and credential rotation for all privileged operators."
+            : "Apply standard hardening, verify backups, confirm logging coverage on affected surface.";
+
+  document.getElementById("attachName").textContent = `ATTACHMENT_${String(s*37).padStart(4,"0")}_LOGS.ZIP`;
+}
+
+function animateCount(el, from, to, dur) {
+  const t0 = performance.now();
+  function step(t){
+    const p = Math.min(1, (t - t0)/dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = pad(Math.round(from + (to - from) * eased));
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+document.getElementById("resetBtn").onclick = () => {
+  clearTimers();
+  likelihood = null; impact = null; phase = "idle";
+  document.getElementById("logBody").innerHTML = `<div class="log-empty">// awaiting parameters · execute calculation to stream evidence</div>`;
+  document.getElementById("score").textContent = "00";
+  document.getElementById("score").className = "score mono";
+  document.getElementById("tierPill").className = "tier-pill hidden";
+  document.getElementById("panels").classList.add("hidden");
+  document.getElementById("barFill").style.width = "0";
+  document.getElementById("resetBtn").classList.add("hidden");
+  document.getElementById("ind1").className = "";
+  document.getElementById("ind2").className = "";
+  document.getElementById("ind3").className = "";
+  renderInputs();
+};
+
+renderInputs();
+</script>
 </body>
 </html>
