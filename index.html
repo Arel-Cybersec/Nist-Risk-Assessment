@@ -733,7 +733,7 @@ footer {
 <div id="preloader">
   <div class="pre-logo">SENTINEL_OS // NIST SP 800-30</div>
   <div class="pre-bar"></div>
-  <div class="pre-status" id="preStatus">INITIALIZING RISK ENGINE…</div>
+  <div class="pre-status" id="preStatus">INITIALIZING RISK ASSESSMENT…</div>
 </div>
 
 <!-- ══ BG CANVAS ══════════════════════════════ -->
@@ -766,13 +766,13 @@ footer {
     <div>
       <div class="hero-eyebrow">Risk Quantification Framework</div>
       <h1 class="hero-title">
-        <span class="glitch" data-text="Threat">Threat</span>
-        <span class="accent"> Vector</span><br>Analysis Engine
+        <span class="glitch" data-text="Threat">Nist</span>
+        <span class="accent"> Risk</span><br>Assessment Dashboard
       </h1>
-      <p class="hero-sub">NIST SP 800-30 Rev.1 compliant probabilistic risk assessment. Map likelihood against impact severity across a 5×5 coordinate matrix — surface actionable intelligence, not noise.</p>
+      <p class="hero-sub">NIST SP 800-30 Rev.1 compliant probabilistic risk assessment. Map likelihood against impact severity across a 5×5 coordinate matrix — support consistent risk assessment decisions, not noise.</p>
       <div class="hero-badges">
-        <div class="badge"><div class="dot green"></div>Core_Stable</div>
-        <div class="badge"><div class="dot cyan"></div>Link_Active</div>
+        <div class="badge"><div class="dot green"></div>Assessment Ready</div>
+        <div class="badge"><div class="dot cyan"></div>Session Active</div>
         <div class="badge"><div class="dot amber"></div>Enc_AES-256-GCM</div>
         <div class="badge"><div class="dot cyan"></div>NIST_Compliant</div>
       </div>
@@ -822,7 +822,7 @@ footer {
       <div class="input-block">
         <div class="sec-eyebrow">Input_01</div>
         <div class="sec-title">Likelihood Factor</div>
-        <div class="sec-desc">Threat event frequency based on historical telemetry and vector analysis.</div>
+        <div class="sec-desc">Likelihood based on historical incidents and expert judgment and vector analysis.</div>
         <div class="like-grid" id="likeGrid"></div>
         <div class="like-desc hidden" id="likeDesc"></div>
       </div>
@@ -946,7 +946,7 @@ footer {
             <div class="audit-file-size mono" id="auditFileSize">0.0 KB · AES-256-GCM</div>
           </div>
         </div>
-        <div class="tm-body">Encrypted packet captures from the primary ingress gateway during peak observed event window. Chain of custody maintained.</div>
+        <div class="tm-body">Assessment evidence from the primary ingress gateway during peak observed event window. Chain of custody maintained.</div>
       </div>
     </div>
 
@@ -956,8 +956,8 @@ footer {
 <!-- ══ FOOTER ════════════════════════════════ -->
 <footer>
   <div class="ft-left">
-    <div class="ft-status"><div class="ft-dot green"></div><span class="ft-lbl">Core_Stable</span></div>
-    <div class="ft-status"><div class="ft-dot cyan"></div><span class="ft-lbl">Link_Active</span></div>
+    <div class="ft-status"><div class="ft-dot green"></div><span class="ft-lbl">Assessment Ready</span></div>
+    <div class="ft-status"><div class="ft-dot cyan"></div><span class="ft-lbl">Session Active</span></div>
     <div class="ft-status"><div class="ft-dot gray" id="ftPhaseDot"></div><span class="ft-lbl" id="ftPhaseLbl">Idle</span></div>
   </div>
   <div class="ft-right mono" id="ftMeta">Terminal_Session 8829-001-ALPHA // 00:00:00</div>
@@ -1013,7 +1013,7 @@ setInterval(tickClock,1000); tickClock();
 
 /* ══ PRELOADER ══════════════════════════════ */
 const preStatuses = [
-  "INITIALIZING RISK ENGINE…",
+  "INITIALIZING RISK ASSESSMENT…",
   "LOADING NIST SP 800-30 FRAMEWORK…",
   "CALIBRATING THREAT MATRICES…",
   "ESTABLISHING SECURE CHANNEL…",
