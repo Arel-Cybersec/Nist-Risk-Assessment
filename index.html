@@ -1438,8 +1438,8 @@ function refreshTrendChart(){
 }
 function refreshCharts(){ refreshSparkline(); refreshTrendChart(); }
 
-/* ══ PDF EXPORT (jsPDF + html2canvas) ══ */
-/* ══ PROFESSIONAL AUDIT PDF EXPORT (jsPDF + html2canvas) ══ */
+
+/* ══ PREMIUM "CYBER-TECH" DARK MODE PDF EXPORT (jsPDF + html2canvas) ══ */
 async function exportPDF(){
   if(!APP.lastResult) return;
   const btn = document.getElementById("exportPdfBtn");
@@ -1454,92 +1454,142 @@ async function exportPDF(){
     const imgData = canvas.toDataURL("image/png");
     const { jsPDF } = window.jspdf;
     
-    // Page constraints
+    // Page Blueprint Constants
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     const pageW = pdf.internal.pageSize.getWidth();
-    const margin = 45;
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 40;
     const contentW = pageW - (margin * 2);
 
-    // ── HEADER SECTION ──────────────────────────────────────────────────
-    pdf.setFillColor(33, 43, 54); // Slate Navy deep accent bar
-    pdf.rect(margin, 40, contentW, 4, "F");
+    // 1. GLOBAL BACKGROUND CANVAS (Deep Tech Slate)
+    pdf.setFillColor(15, 18, 25);
+    pdf.rect(0, 0, pageW, pageH, "F");
+
+    // 2. HEADER BRANDING & GRID LINE
+    pdf.setFillColor(0, 229, 150); // Neon Accent Terminal Line
+    pdf.rect(margin, 40, contentW, 2, "F");
 
     pdf.setFont("courier", "bold"); 
-    pdf.setFontSize(15);
-    pdf.setTextColor(20, 24, 33);
-    pdf.text("SENTINEL GRC — RISK ASSESSMENT AUDIT ARTIFACT", margin, 62);
+    pdf.setFontSize(14);
+    pdf.setTextColor(240, 244, 248);
+    pdf.text("SENTINEL GRC // RISK QUANTIFICATION ENGINE", margin, 65);
     
     pdf.setFont("courier", "normal"); 
+    pdf.setFontSize(8);
+    pdf.setTextColor(110, 125, 140);
+    pdf.text(`SYS_EPOCH_GEN: ${new Date().toUTCString().toUpperCase()}`, margin, 78);
+
+    // 3. STATS & SUMMARY CONTROL CARDS (Grid Alignment)
+    let cardY = 95;
+    const cardH = 68;
+    
+    // Main Container Box
+    pdf.setFillColor(22, 28, 38); 
+    pdf.setDrawColor(35, 45, 60);
+    pdf.setLineWidth(1);
+    pdf.rect(margin, cardY, contentW, cardH, "FD");
+
+    // Grid Coordinates for Content Positioning
+    const c1 = margin + 20;
+    const c1_v = c1 + 105;
+    const c2 = margin + (contentW / 2) + 10;
+    const c2_v = c2 + 105;
+
+    let textY = cardY + 20;
     pdf.setFontSize(8.5);
-    pdf.setTextColor(110, 120, 135);
-    pdf.text(`GENERATED: ${new Date().toUTCString()}`, margin, 76);
 
-    // ── TWO-COLUMN METADATA GRID ────────────────────────────────────────
-    let currentY = 100;
-    const colOffset = contentW / 2;
+    // Row 1: Target Environmental Context
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("CORE_FRAMEWORK:", c1, textY);
+    pdf.setFont("courier", "normal"); pdf.setTextColor(240, 244, 248); pdf.text(APP.lastResult.framework.toUpperCase(), c1_v, textY);
+    
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("RAW_BASE_SCORE:", c2, textY);
+    pdf.setFont("courier", "normal"); pdf.setTextColor(240, 244, 248); pdf.text(`${APP.lastResult.raw_score} / 25`, c2_v, textY);
 
-    pdf.setFontSize(9.5);
-    pdf.setTextColor(40, 50, 65);
+    // Row 2: Asset Identifiers
+    textY += 16;
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("TARGET_ASSET:", c1, textY);
+    pdf.setFont("courier", "normal"); pdf.setTextColor(240, 244, 248); pdf.text(APP.lastResult.asset_label.toUpperCase(), c1_v, textY);
+    
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("CONTROL_EFF:", c2, textY);
+    pdf.setFont("courier", "normal"); pdf.setTextColor(0, 229, 150); pdf.text(`${APP.lastResult.control_effectiveness}% APPLIED`, c2_v, textY);
 
-    // Column 1
-    pdf.setFont("courier", "bold"); pdf.text("Framework:", margin, currentY);
-    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.framework.toUpperCase(), margin + 75, currentY);
-
-    pdf.setFont("courier", "bold"); pdf.text("Asset:", margin, currentY + 16);
-    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.asset_label, margin + 75, currentY + 16);
-
-    pdf.setFont("courier", "bold"); pdf.text("CVE Ref:", margin, currentY + 32);
-    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.cve || "N/A", margin + 75, currentY + 32);
-
-    // Column 2
-    pdf.setFont("courier", "bold"); pdf.text("Base Score:", margin + colOffset, currentY);
-    pdf.setFont("courier", "normal"); pdf.text(`${APP.lastResult.raw_score} / 25`, margin + colOffset + 95, currentY);
-
-    pdf.setFont("courier", "bold"); pdf.text("Control Eff:", margin + colOffset, currentY + 16);
-    pdf.setFont("courier", "normal"); pdf.text(`${APP.lastResult.control_effectiveness}%`, margin + colOffset + 95, currentY + 16);
-
-    pdf.setFont("courier", "bold"); pdf.text("Residual:", margin + colOffset, currentY + 32);
-    // Draw bold colored status indicator for the tier if desired
+    // Row 3: Exposure Matrix References
+    textY += 16;
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("VULN_REFERENCE:", c1, textY);
+    pdf.setFont("courier", "normal"); pdf.setTextColor(170, 185, 200); pdf.text(APP.lastResult.cve || "NONE_DETECTED", c1_v, textY);
+    
+    pdf.setFont("courier", "bold"); pdf.setTextColor(130, 145, 165); pdf.text("RESIDUAL_RISK:", c2, textY);
+    
+    // Dynamic Threat Tier Badging Logic
+    const currentTier = APP.lastResult.tier.toUpperCase();
+    if(currentTier === "HIGH" || currentTier === "CRITICAL" || currentTier === "CRIT") {
+      pdf.setTextColor(255, 75, 75); // Threat Neon Red
+    } else if(currentTier === "MODERATE" || currentTier === "MID" || currentTier === "MED") {
+      pdf.setTextColor(255, 160, 0);  // Warning Amber
+    } else {
+      pdf.setTextColor(0, 229, 150);  // Safe Neon Green
+    }
     pdf.setFont("courier", "bold"); 
-    pdf.text(`${APP.lastResult.score} [${APP.lastResult.tier.toUpperCase()}]`, margin + colOffset + 95, currentY + 32);
+    pdf.text(`${APP.lastResult.score} [${currentTier}]`, c2_v, textY);
 
-    // ── CRYPTOGRAPHIC INTEGRITY ANCHOR ──────────────────────────────────
-    currentY += 52;
-    pdf.setFillColor(245, 247, 250); // Light gray highlight box
+    // 4. CRYPTOGRAPHIC SIGNATURE SECTION
+    let sigY = cardY + cardH + 12;
+    pdf.setFillColor(18, 22, 30);
+    pdf.setDrawColor(30, 38, 50);
     
-    // Split hash safely and determine dynamic space requirements
-    pdf.setFont("courier", "normal"); pdf.setFontSize(8);
-    const splitHash = pdf.splitTextToSize(`SHA-256 Audit Signature: ${APP.lastResult.hash}`, contentW - 20);
-    const boxHeight = (splitHash.length * 11) + 12;
+    pdf.setFont("courier", "normal"); pdf.setFontSize(7.5);
+    const fullHashText = `INTEGRITY_ANCHOR_SHA256: ${APP.lastResult.hash}`;
+    const wrappedHash = pdf.splitTextToSize(fullHashText, contentW - 24);
+    const sigBoxH = (wrappedHash.length * 11) + 12;
     
-    pdf.rect(margin, currentY, contentW, boxHeight, "F");
-    pdf.setTextColor(80, 95, 110);
-    pdf.text(splitHash, margin + 10, currentY + 14);
+    pdf.rect(margin, sigY, contentW, sigBoxH, "FD");
+    pdf.setTextColor(100, 115, 130);
+    pdf.text(wrappedHash, margin + 12, sigY + 14);
 
-    // ── MATRIX EMBED ─────────────────────────────────────────────────────
-    currentY += boxHeight + 25;
-    const imgW = contentW; 
+    // 5. MATRIX DASHBOARD IMAGE EMBED
+    let imgY = sigY + sigBoxH + 20;
+    const imgW = contentW;
     const imgH = imgW * (canvas.height / canvas.width);
-    pdf.addImage(imgData, "PNG", margin, currentY, imgW, imgH);
+    
+    // Defensive Page Break Architecture
+    if (imgY + imgH > pageH - 45) {
+      pdf.addPage();
+      // Repaint Background Canvas for Page 2
+      pdf.setFillColor(15, 18, 25);
+      pdf.rect(0, 0, pageW, pageH, "F");
+      imgY = 40;
+    }
+    
+    // Add subtle structural border block around the dashboard image
+    pdf.setDrawColor(40, 50, 65);
+    pdf.rect(margin - 1, imgY - 1, imgW + 2, imgH + 2, "S");
+    pdf.addImage(imgData, "PNG", margin, imgY, imgW, imgH);
 
-    // ── COMPLIANCE FOOTER ───────────────────────────────────────────────
-    currentY += imgH + 30;
-    pdf.setDrawColor(210, 215, 225);
-    pdf.line(margin, currentY, pageW - margin, currentY); // Subtle divider rule
+    // 6. LOGISTICAL AUDIT FOOTER
+    let footerY = imgY + imgH + 25;
+    if (footerY > pageH - 35) {
+      pdf.addPage();
+      pdf.setFillColor(15, 18, 25);
+      pdf.rect(0, 0, pageW, pageH, "F");
+      footerY = 40;
+    }
+
+    pdf.setDrawColor(30, 38, 50);
+    pdf.line(margin, footerY, pageW - margin, footerY);
 
     pdf.setFont("courier", "normal"); 
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(140, 150, 165);
+    pdf.setFontSize(7);
+    pdf.setTextColor(90, 100, 115);
     
-    const footerText = "CONFIDENTIAL SYSTEM GENERATED RECORD • FINGERPRINTED VIA WEB CRYPTO API FOR CHAIN-OF-CUSTODY VERIFICATION.";
-    pdf.text(footerText, margin, currentY + 14);
+    const footerMsg = "SECURE AUDIT RECORD // METRICS VERIFIED CRYPTOGRAPHICALLY VIA BROWSER WEB CRYPTO SUITE. DISTRIBUTION RESTRICTED.";
+    pdf.text(footerMsg, margin, footerY + 14);
 
-    // Save Output
-    pdf.save(`SENTINEL_Audit_${APP.lastResult.tier.toUpperCase()}_${Date.now()}.pdf`);
-    showToast("Audit artifact PDF generated");
+    // Save Generated Blob
+    pdf.save(`SENTINEL_AUDIT_${currentTier}_${Date.now()}.pdf`);
+    showToast("Premium audit artifact generated successfully");
 
   } catch(err) {
-    showToast("PDF generation failed — see console");
+    showToast("PDF composition matrix failure — see console");
     console.error(err);
   } finally {
     btn.classList.remove("loading"); btn.disabled = false;
