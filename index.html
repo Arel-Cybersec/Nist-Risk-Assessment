@@ -1439,41 +1439,110 @@ function refreshTrendChart(){
 function refreshCharts(){ refreshSparkline(); refreshTrendChart(); }
 
 /* ══ PDF EXPORT (jsPDF + html2canvas) ══ */
+/* ══ PROFESSIONAL AUDIT PDF EXPORT (jsPDF + html2canvas) ══ */
 async function exportPDF(){
   if(!APP.lastResult) return;
-  const btn=document.getElementById("exportPdfBtn");
-  btn.classList.add("loading"); btn.disabled=true;
-  try{
-    const target=document.querySelector(".matrix-panel");
-    const canvas=await html2canvas(target,{ backgroundColor:getComputedStyle(document.documentElement).getPropertyValue('--panel').trim(), scale:2 });
-    const imgData=canvas.toDataURL("image/png");
+  const btn = document.getElementById("exportPdfBtn");
+  btn.classList.add("loading"); btn.disabled = true;
+
+  try {
+    const target = document.querySelector(".matrix-panel");
+    const canvas = await html2canvas(target, { 
+      backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--panel').trim(), 
+      scale: 2 
+    });
+    const imgData = canvas.toDataURL("image/png");
     const { jsPDF } = window.jspdf;
-    const pdf=new jsPDF({ unit:"pt", format:"a4" });
-    const pageW=pdf.internal.pageSize.getWidth();
+    
+    // Page constraints
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const margin = 45;
+    const contentW = pageW - (margin * 2);
 
-    pdf.setFont("courier","bold"); pdf.setFontSize(16);
-    pdf.text("SENTINEL — Risk Assessment Audit Artifact", 40, 50);
-    pdf.setFont("courier","normal"); pdf.setFontSize(9);
-    pdf.text(`Generated: ${new Date().toString()}`, 40, 68);
-    pdf.text(`Framework: ${APP.lastResult.framework.toUpperCase()}  ·  Asset: ${APP.lastResult.asset_label}`, 40, 82);
-    pdf.text(`Score: ${APP.lastResult.score}  ·  Adjusted: ${APP.lastResult.adj_score}  ·  Tier: ${APP.lastResult.tier.toUpperCase()}`, 40, 96);
-    pdf.text(`Control Effectiveness: ${APP.lastResult.control_effectiveness}%  ·  Raw Score: ${APP.lastResult.raw_score}  ·  CVE Reference: ${APP.lastResult.cve}`, 40, 110);
+    // ── HEADER SECTION ──────────────────────────────────────────────────
+    pdf.setFillColor(33, 43, 54); // Slate Navy deep accent bar
+    pdf.rect(margin, 40, contentW, 4, "F");
+
+    pdf.setFont("courier", "bold"); 
+    pdf.setFontSize(15);
+    pdf.setTextColor(20, 24, 33);
+    pdf.text("SENTINEL GRC — RISK ASSESSMENT AUDIT ARTIFACT", margin, 62);
+    
+    pdf.setFont("courier", "normal"); 
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(110, 120, 135);
+    pdf.text(`GENERATED: ${new Date().toUTCString()}`, margin, 76);
+
+    // ── TWO-COLUMN METADATA GRID ────────────────────────────────────────
+    let currentY = 100;
+    const colOffset = contentW / 2;
+
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(40, 50, 65);
+
+    // Column 1
+    pdf.setFont("courier", "bold"); pdf.text("Framework:", margin, currentY);
+    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.framework.toUpperCase(), margin + 75, currentY);
+
+    pdf.setFont("courier", "bold"); pdf.text("Asset:", margin, currentY + 16);
+    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.asset_label, margin + 75, currentY + 16);
+
+    pdf.setFont("courier", "bold"); pdf.text("CVE Ref:", margin, currentY + 32);
+    pdf.setFont("courier", "normal"); pdf.text(APP.lastResult.cve || "N/A", margin + 75, currentY + 32);
+
+    // Column 2
+    pdf.setFont("courier", "bold"); pdf.text("Base Score:", margin + colOffset, currentY);
+    pdf.setFont("courier", "normal"); pdf.text(`${APP.lastResult.raw_score} / 25`, margin + colOffset + 95, currentY);
+
+    pdf.setFont("courier", "bold"); pdf.text("Control Eff:", margin + colOffset, currentY + 16);
+    pdf.setFont("courier", "normal"); pdf.text(`${APP.lastResult.control_effectiveness}%`, margin + colOffset + 95, currentY + 16);
+
+    pdf.setFont("courier", "bold"); pdf.text("Residual:", margin + colOffset, currentY + 32);
+    // Draw bold colored status indicator for the tier if desired
+    pdf.setFont("courier", "bold"); 
+    pdf.text(`${APP.lastResult.score} [${APP.lastResult.tier.toUpperCase()}]`, margin + colOffset + 95, currentY + 32);
+
+    // ── CRYPTOGRAPHIC INTEGRITY ANCHOR ──────────────────────────────────
+    currentY += 52;
+    pdf.setFillColor(245, 247, 250); // Light gray highlight box
+    
+    // Split hash safely and determine dynamic space requirements
+    pdf.setFont("courier", "normal"); pdf.setFontSize(8);
+    const splitHash = pdf.splitTextToSize(`SHA-256 Audit Signature: ${APP.lastResult.hash}`, contentW - 20);
+    const boxHeight = (splitHash.length * 11) + 12;
+    
+    pdf.rect(margin, currentY, contentW, boxHeight, "F");
+    pdf.setTextColor(80, 95, 110);
+    pdf.text(splitHash, margin + 10, currentY + 14);
+
+    // ── MATRIX EMBED ─────────────────────────────────────────────────────
+    currentY += boxHeight + 25;
+    const imgW = contentW; 
+    const imgH = imgW * (canvas.height / canvas.width);
+    pdf.addImage(imgData, "PNG", margin, currentY, imgW, imgH);
+
+    // ── COMPLIANCE FOOTER ───────────────────────────────────────────────
+    currentY += imgH + 30;
+    pdf.setDrawColor(210, 215, 225);
+    pdf.line(margin, currentY, pageW - margin, currentY); // Subtle divider rule
+
+    pdf.setFont("courier", "normal"); 
     pdf.setFontSize(7.5);
-    pdf.text(`SHA-256 Audit Hash:`, 40, 128);
-    pdf.text(pdf.splitTextToSize(APP.lastResult.hash, pageW-80), 40, 140);
+    pdf.setTextColor(140, 150, 165);
+    
+    const footerText = "CONFIDENTIAL SYSTEM GENERATED RECORD • FINGERPRINTED VIA WEB CRYPTO API FOR CHAIN-OF-CUSTODY VERIFICATION.";
+    pdf.text(footerText, margin, currentY + 14);
 
-    const imgW=pageW-80; const imgH=imgW * (canvas.height/canvas.width);
-    pdf.addImage(imgData,"PNG",40,160,imgW,imgH);
-
-    pdf.setFontSize(8);
-    pdf.text("This artifact is cryptographically fingerprinted via the browser Web Crypto API (SHA-256) for chain-of-custody verification.", 40, 168+imgH+20);
-    pdf.save(`SENTINEL_Audit_${APP.lastResult.tier}_${Date.now()}.pdf`);
+    // Save Output
+    pdf.save(`SENTINEL_Audit_${APP.lastResult.tier.toUpperCase()}_${Date.now()}.pdf`);
     showToast("Audit artifact PDF generated");
-  }catch(err){
+
+  } catch(err) {
     showToast("PDF generation failed — see console");
     console.error(err);
-  }finally{
-    btn.classList.remove("loading"); btn.disabled=false;
+  } finally {
+    btn.classList.remove("loading"); btn.disabled = false;
   }
 }
 
