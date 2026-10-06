@@ -43,3 +43,9 @@ terraform.rc
 # Uncomment the line below if you want to ignore planout files.
 # planout
 .antigravity/
+
+# Python bytecode from scan.py tests
+__pycache__/
+
+# Local SARIF output from scan.py and checkov
+*.sarif

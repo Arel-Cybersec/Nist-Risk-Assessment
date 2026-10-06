@@ -1,0 +1,14 @@
+# REMEDIATION NIST-12: Keep the Terraform provider and pinned Actions current (SI-2, SR-3)
+version: 2
+updates:
+  - package-ecosystem: terraform
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies, security]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies, security]
