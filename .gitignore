@@ -46,3 +46,6 @@ terraform.rc
 
 # Python bytecode from scan.py tests
 __pycache__/
+
+# Local SARIF output from scan.py and checkov
+*.sarif
