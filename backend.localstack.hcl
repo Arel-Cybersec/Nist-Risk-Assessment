@@ -1,5 +1,6 @@
 # Backend settings for LocalStack. Create the bucket once before the first init:
 #   awslocal s3 mb s3://fintech-terraform-state
+# Credentials come from the environment (AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test).
 # For real AWS, copy this file, drop the endpoint and skip_* lines, and set kms_key_id.
 bucket       = "fintech-terraform-state"
 key          = "nist-risk-assessment/terraform.tfstate"
@@ -7,8 +8,6 @@ region       = "us-east-1"
 encrypt      = true
 use_lockfile = true
 
-access_key                  = "mock_access_key"
-secret_key                  = "mock_secret_key"
 use_path_style              = true
 skip_credentials_validation = true
 skip_metadata_api_check     = true

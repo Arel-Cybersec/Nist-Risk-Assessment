@@ -38,3 +38,21 @@ variable "security_alert_email" {
   type        = string
   default     = ""
 }
+
+variable "use_localstack" {
+  description = "Send all AWS API calls to LocalStack on localhost:4566 and relax credential checks. Set to false for a real AWS account."
+  type        = bool
+  default     = true
+}
+
+variable "owner" {
+  description = "Owner tag applied to every resource through provider default_tags."
+  type        = string
+  default     = "grc-team"
+}
+
+variable "ami_id" {
+  description = "Override the application AMI. Leave null to use the latest Amazon Linux 2023 image published by Amazon. Set it when the target (for example LocalStack) has no such image."
+  type        = string
+  default     = null
+}

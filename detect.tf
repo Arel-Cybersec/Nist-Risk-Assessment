@@ -1,6 +1,7 @@
 # REMEDIATION NIST-08: Threat detection wired to an alerting path (IR-4, IR-5, IR-6, SI-4)
 
 resource "aws_guardduty_detector" "main" {
+  #checkov:skip=CKV2_AWS_3:Single-account deployment; there is no AWS Organization to delegate GuardDuty administration to
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
 }
@@ -108,4 +109,128 @@ resource "aws_cloudwatch_event_rule" "guardduty_high" {
 resource "aws_cloudwatch_event_target" "guardduty_high" {
   rule = aws_cloudwatch_event_rule.guardduty_high.name
   arn  = aws_sns_topic.security_alerts.arn
+}
+
+# ── REMEDIATION NIST-14: Malware scanning of every object written to the PII bucket (SI-3, MP-6) ──
+resource "aws_iam_role" "malware_protection" {
+  name = "FinTech-GuardDuty-MalwareProtection"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "malware-protection-plan.guardduty.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+        Condition = { StringEquals = { "aws:SourceAccount" = local.account_id } }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "malware_protection" {
+  name = "ScanPiiBucket"
+  role = aws_iam_role.malware_protection.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ManageGuardDutyEventBridgeRule"
+        Effect   = "Allow"
+        Action   = ["events:PutRule", "events:DeleteRule", "events:PutTargets", "events:RemoveTargets"]
+        Resource = "arn:${local.partition}:events:${var.aws_region}:${local.account_id}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+        Condition = {
+          StringLike = { "events:ManagedBy" = "malware-protection-plan.guardduty.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "MonitorGuardDutyEventBridgeRule"
+        Effect   = "Allow"
+        Action   = ["events:DescribeRule", "events:ListTargetsByRule"]
+        Resource = "arn:${local.partition}:events:${var.aws_region}:${local.account_id}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+      },
+      {
+        Sid      = "TagScanResults"
+        Effect   = "Allow"
+        Action   = ["s3:PutObjectTagging", "s3:GetObjectTagging", "s3:PutObjectVersionTagging", "s3:GetObjectVersionTagging"]
+        Resource = "${aws_s3_bucket.fintech_storage.arn}/*"
+      },
+      {
+        Sid      = "EnableBucketEventNotifications"
+        Effect   = "Allow"
+        Action   = ["s3:PutBucketNotification", "s3:GetBucketNotification"]
+        Resource = aws_s3_bucket.fintech_storage.arn
+      },
+      {
+        Sid      = "WriteValidationObject"
+        Effect   = "Allow"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.fintech_storage.arn}/malware-protection-resource-validation-object"
+      },
+      {
+        Sid      = "CheckBucketOwnership"
+        Effect   = "Allow"
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.fintech_storage.arn
+      },
+      {
+        Sid      = "ReadObjectsToScan"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:GetObjectVersion"]
+        Resource = "${aws_s3_bucket.fintech_storage.arn}/*"
+      },
+      {
+        Sid       = "DecryptObjectsToScan"
+        Effect    = "Allow"
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey"]
+        Resource  = [aws_kms_key.pii.arn, aws_kms_key.phi.arn]
+        Condition = { StringEquals = { "kms:ViaService" = local.s3_via_primary } }
+      }
+    ]
+  })
+}
+
+resource "aws_guardduty_malware_protection_plan" "pii_bucket" {
+  role = aws_iam_role.malware_protection.arn
+
+  protected_resource {
+    s3_bucket {
+      bucket_name = aws_s3_bucket.fintech_storage.id
+    }
+  }
+
+  actions {
+    tagging {
+      status = "ENABLED"
+    }
+  }
+
+  depends_on = [aws_iam_role_policy.malware_protection]
+}
+
+# ── REMEDIATION NIST-19: Sensitive-data discovery on the PII bucket (PT-2, RA-3) ──
+resource "aws_macie2_account" "main" {
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+  status                       = "ENABLED"
+}
+
+resource "aws_macie2_classification_job" "pii_bucket" {
+  name                = "fintech-pii-weekly-discovery"
+  job_type            = "SCHEDULED"
+  initial_run         = true
+  sampling_percentage = 100
+
+  schedule_frequency {
+    weekly_schedule = "MONDAY"
+  }
+
+  s3_job_definition {
+    bucket_definitions {
+      account_id = local.account_id
+      buckets    = [aws_s3_bucket.fintech_storage.id]
+    }
+  }
+
+  depends_on = [aws_macie2_account.main]
 }

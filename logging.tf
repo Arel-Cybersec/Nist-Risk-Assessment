@@ -57,6 +57,13 @@ resource "aws_kms_key" "audit" {
         }
       },
       {
+        Sid       = "SessionManagerTranscriptEncryption"
+        Effect    = "Allow"
+        Principal = { AWS = aws_iam_role.fintech_core_app.arn }
+        Action    = "kms:Decrypt"
+        Resource  = "*"
+      },
+      {
         Sid       = "AlarmAndEventPublishingToEncryptedTopic"
         Effect    = "Allow"
         Principal = { Service = ["cloudwatch.amazonaws.com", "events.amazonaws.com"] }
@@ -74,6 +81,8 @@ resource "aws_kms_alias" "audit" {
 
 # ── Immutable audit bucket: CloudTrail and VPC Flow Logs ──
 resource "aws_s3_bucket" "audit" {
+  #checkov:skip=CKV_AWS_144:Integrity comes from Object Lock and CloudTrail digest files; a cross-region copy of the logs is not required by this baseline
+  #checkov:skip=CKV2_AWS_62:Log delivery bucket; nothing consumes object-created events
   bucket              = "simulated-fintech-audit-logs-2026"
   object_lock_enabled = true
 
@@ -123,6 +132,29 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
     }
     bucket_key_enabled = true
   }
+}
+
+# Older log versions move to cheaper storage; Object Lock still prevents deletion before retention ends
+resource "aws_s3_bucket_lifecycle_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+
+  rule {
+    id     = "archive-audit-logs"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER_IR"
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.audit]
 }
 
 resource "aws_s3_bucket_logging" "audit" {
@@ -197,6 +229,9 @@ resource "aws_s3_bucket_policy" "audit" {
 # S3 server access logging only delivers to buckets with SSE-S3 default encryption
 # and no Object Lock default retention, so it cannot share the audit bucket.
 resource "aws_s3_bucket" "access_logs" {
+  #checkov:skip=CKV_AWS_145:S3 server access logs and ALB access logs can only be delivered to SSE-S3 buckets
+  #checkov:skip=CKV_AWS_144:Request logs are retained in-region; CloudTrail data events provide the cross-checked record
+  #checkov:skip=CKV2_AWS_62:Log delivery bucket; nothing consumes object-created events
   bucket = "simulated-fintech-access-logs-2026"
 
   tags = {
@@ -232,6 +267,34 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+
+  rule {
+    id     = "retain-request-logs-400-days"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 400
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.access_logs]
+}
+
+# Regional Elastic Load Balancing account that writes ALB access logs
+data "aws_elb_service_account" "main" {}
+
 resource "aws_s3_bucket_policy" "access_logs" {
   bucket = aws_s3_bucket.access_logs.id
 
@@ -248,6 +311,20 @@ resource "aws_s3_bucket_policy" "access_logs" {
           StringEquals = { "aws:SourceAccount" = local.account_id }
           ArnLike      = { "aws:SourceArn" = [aws_s3_bucket.fintech_storage.arn, aws_s3_bucket.audit.arn] }
         }
+      },
+      {
+        Sid       = "AlbAccessLogDeliveryLegacyRegions"
+        Effect    = "Allow"
+        Principal = { AWS = data.aws_elb_service_account.main.arn }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs.arn}/alb/AWSLogs/${local.account_id}/*"
+      },
+      {
+        Sid       = "AlbAccessLogDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs.arn}/alb/AWSLogs/${local.account_id}/*"
       },
       {
         Sid       = "DenyInsecureTransport"
@@ -303,6 +380,7 @@ resource "aws_iam_role_policy" "cloudtrail_to_logs" {
 }
 
 resource "aws_cloudtrail" "audit" {
+  #checkov:skip=CKV_AWS_252:Per-file delivery notifications are not used; alerting runs through the metric filters and EventBridge rules in detect.tf
   name                          = local.trail_name
   s3_bucket_name                = aws_s3_bucket.audit.id
   s3_key_prefix                 = "cloudtrail"
@@ -324,4 +402,35 @@ resource "aws_cloudtrail" "audit" {
   }
 
   depends_on = [aws_s3_bucket_policy.audit, aws_iam_role_policy.cloudtrail_to_logs]
+}
+
+# ── Session Manager transcripts (REMEDIATION NIST-24: AC-17(1), AU-12) ──
+# Every interactive session on an instance is recorded to an encrypted log group.
+resource "aws_cloudwatch_log_group" "ssm_sessions" {
+  name              = "/fintech/ssm-sessions"
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.audit.arn
+}
+
+resource "aws_ssm_document" "session_preferences" {
+  name            = "SSM-SessionManagerRunShell"
+  document_type   = "Session"
+  document_format = "JSON"
+
+  content = jsonencode({
+    schemaVersion = "1.0"
+    description   = "Session Manager preferences: log every session to CloudWatch Logs"
+    sessionType   = "Standard_Stream"
+    inputs = {
+      cloudWatchLogGroupName      = aws_cloudwatch_log_group.ssm_sessions.name
+      cloudWatchEncryptionEnabled = true
+      cloudWatchStreamingEnabled  = true
+      kmsKeyId                    = aws_kms_key.audit.key_id
+      s3BucketName                = ""
+      idleSessionTimeout          = "20"
+      maxSessionDuration          = "60"
+      runAsEnabled                = false
+      shellProfile                = { linux = "" }
+    }
+  })
 }

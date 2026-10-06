@@ -125,13 +125,85 @@ resource "aws_iam_role_policy" "pii_breakglass_read" {
         Effect   = "Allow"
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.fintech_storage.arn}/*"
+      },
+      {
+        Sid       = "DecryptPiiNotPhi"
+        Effect    = "Allow"
+        Action    = "kms:Decrypt"
+        Resource  = aws_kms_key.pii.arn
+        Condition = { StringEquals = { "kms:ViaService" = local.s3_via_primary } }
       }
     ]
   })
 }
 
+# REMEDIATION NIST-22, NIST-24: Workload identity managed in code (CM-2, AC-17)
+# Used as the EC2 instance profile: reads the PII bucket through the VPC endpoint
+# and is administered through SSM Session Manager instead of SSH.
+resource "aws_iam_role" "fintech_core_app" {
+  name = "FinTechCoreAppRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "fintech_core_app_ssm" {
+  role       = aws_iam_role.fintech_core_app.name
+  policy_arn = "arn:${local.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "fintech_core_app" {
+  name = "FinTechCoreAppAccess"
+  role = aws_iam_role.fintech_core_app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadRegulatedObjects"
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.fintech_storage.arn}/*"
+      },
+      {
+        Sid       = "DecryptRegulatedObjects"
+        Effect    = "Allow"
+        Action    = "kms:Decrypt"
+        Resource  = [aws_kms_key.pii.arn, aws_kms_key.phi.arn]
+        Condition = { StringEquals = { "kms:ViaService" = local.s3_via_primary } }
+      },
+      {
+        Sid      = "WriteSessionManagerTranscripts"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+        Resource = "${aws_cloudwatch_log_group.ssm_sessions.arn}:*"
+      },
+      {
+        Sid      = "DescribeSessionLogGroups"
+        Effect   = "Allow"
+        Action   = "logs:DescribeLogGroups"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "fintech_core_app" {
+  name = "FinTechCoreAppProfile"
+  role = aws_iam_role.fintech_core_app.name
+}
+
 # Create the developer user account
 resource "aws_iam_user" "vulnerable_user" {
+  #checkov:skip=CKV_AWS_273:Migration to IAM Identity Center is tracked in the report (NIST-04); until then MFA is enforced by SecureDevPolicy
   name = "dev-analyst-01"
 }
 

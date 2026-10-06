@@ -4,6 +4,46 @@ resource "aws_kms_key" "backup" {
   description             = "Encrypts recovery points in the FinTech backup vault"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "KeyAdministrationOnly"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:${local.partition}:iam::${local.account_id}:root" }
+        Action    = local.key_admin_actions
+        Resource  = "*"
+      },
+      {
+        Sid       = "BackupServiceUse"
+        Effect    = "Allow"
+        Principal = { AWS = aws_iam_role.backup.arn }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "backup.${var.aws_region}.amazonaws.com" } }
+      },
+      {
+        Sid       = "AccountCreatesBackupGrants"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:${local.partition}:iam::${local.account_id}:root" }
+        Action    = "kms:CreateGrant"
+        Resource  = "*"
+        Condition = {
+          Bool         = { "kms:GrantIsForAWSResource" = "true" }
+          StringEquals = { "kms:ViaService" = "backup.${var.aws_region}.amazonaws.com" }
+        }
+      },
+      {
+        Sid       = "BackupServiceGrants"
+        Effect    = "Allow"
+        Principal = { AWS = aws_iam_role.backup.arn }
+        Action    = "kms:CreateGrant"
+        Resource  = "*"
+        Condition = { Bool = { "kms:GrantIsForAWSResource" = "true" } }
+      }
+    ]
+  })
 }
 
 resource "aws_kms_alias" "backup" {
