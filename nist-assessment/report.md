@@ -472,3 +472,26 @@ $ cd /tmp && python3 -I <repo>/scan.py
 | NIST-24 | AC-17, AC-17(3) | PR.AA-05 | 6 | Moderate |
 | NIST-25 | SI-10 | PR.PS-06 | 4 | Low |
 | NIST-26 | SC-6 | PR.IR-04 | 5 | Low |
+
+## Appendix C: Remediation status (Phase 0)
+
+Sections 1-4 describe the system at revision `5b1e5e4`. This appendix records what changed afterwards. Phase 1 and Phase 2 findings remain open.
+
+| Step | Findings | Status | What changed | Files |
+|---|---|---|---|---|
+| 1 | NIST-01, NIST-04, NIST-13 | Remediated | Group policy denies every action except MFA self-enrolment when `aws:MultiFactorAuthPresent` is false. `aws_iam_account_password_policy` added (length 14, reuse 24, max age 90). Developers lose all S3 access to the PII bucket; reads go through `FinTech-PII-BreakGlass-Read` (MFA under 1 hour old, 1-hour sessions, `GetObject` only, no `ListBucket`). EC2 start/stop limited to instances tagged `Development` or `Staging`. Exclusive `aws_iam_group_membership` replaced by `aws_iam_user_group_membership`. | `iam.tf` |
+| 2 | NIST-02 | Remediated | Internet-facing ALB on 443 with ACM certificate and `ELBSecurityPolicy-TLS13-1-2-2021-06`; port 80 issues a 301 to HTTPS; invalid headers dropped. Instance SG accepts web traffic only from the ALB SG. PII, replica, audit and access-log buckets all deny `aws:SecureTransport = false`; PII and replica also deny `s3:TlsVersion < 1.2`. | `alb.tf`, `main.tf`, `s3.tf`, `logging.tf` |
+| 3 | NIST-03 | Remediated | Multi-region CloudTrail with log file validation, global service events, and S3 data events on the PII bucket, delivered to a KMS-encrypted bucket under Object Lock (default COMPLIANCE, 365 days) and to an encrypted CloudWatch log group. VPC Flow Logs (all traffic) to the same bucket. S3 server access logs for the PII and audit buckets go to a separate SSE-S3 bucket, because S3 server access logging cannot deliver to SSE-KMS or default-retention buckets. | `logging.tf`, `main.tf`, `s3.tf` |
+| 4 | NIST-05 | Remediated | Random CVE, EPSS, CVSS, audit hash and file-size values removed. Each stream line is derived from the inputs (labels, formula, band rule, protocol). The record carries a real SHA-256 over its JSON, computed with Web Crypto. Unbacked claims ("NIST_Compliant", "Enc_AES-256-GCM", "LOGGED TO SIEM", "Chain of custody maintained", "Session Active", "ESTABLISHING SECURE CHANNEL") replaced with accurate wording. | `index.html` |
+| 5 | NIST-06 | Remediated, one gap | Versioning on the PII bucket, cross-region replication (with delete markers) to `us-west-2`, daily AWS Backup with 35-day retention in a KMS-encrypted vault with Vault Lock (7-365 days). Single instance replaced by an Auto Scaling group (2-4 instances, ELB health checks) across two AZs. Remote state via `backend "s3"` with `encrypt` and `use_lockfile`. **Gap:** S3 MFA Delete is not set because it can only be enabled with the root user's MFA device through the API, not through Terraform. The replica uses SSE-S3 until the PII bucket moves to KMS (step 11). | `s3.tf`, `backup.tf`, `main.tf`, `backend.tf`, `backend.localstack.hcl` |
+| 6 | NIST-07 | Remediated | `scan.py` parses HCL blocks (comment- and string-aware), checks 23 rules mapped to 800-53 controls including absence checks, exits 1 at or above `--fail-on` (default HIGH) and 2 when no `.tf` files exist, resolves paths from its own location, and writes SARIF 2.1.0. 13 unit tests in `tests/test_scan.py`. | `scan.py`, `tests/test_scan.py` |
+| 7 | NIST-08 | Remediated, one gap | GuardDuty with S3 data events, Security Hub with the NIST SP 800-53 Rev.5 standard, eight CloudTrail metric filters with alarms (root use, console sign-in without MFA, IAM policy, security group, S3 policy, CloudTrail and KMS key changes, unauthorized API calls), and an EventBridge rule for GuardDuty findings of severity 7 or higher. All alerts go to a KMS-encrypted SNS topic with optional email subscription. **Gap:** GuardDuty Malware Protection for S3 is deferred to step 11 alongside the PII bucket's KMS migration. | `detect.tf` |
+
+**Verification of the remediated code**
+
+- `terraform validate` passes with Terraform 1.16.5 and AWS provider 5.100.0, both installed from releases.hashicorp.com and checked against HashiCorp's published SHA-256 sums. `terraform fmt -check` passes.
+- The baseline `5b1e5e4` **fails** `terraform validate`: `providers.tf:24` sets an endpoint named `vpc`, which the AWS provider does not accept. Before this change, `terraform plan` could not run at all. VPC calls use the `ec2` endpoint.
+- `python3 scan.py` on the remediated code: 0 CRITICAL, 0 HIGH, 10 MEDIUM, exit 0. All ten MEDIUMs are Phase 1 items (NIST-09, NIST-10, NIST-15, NIST-19, NIST-20).
+- `python3 scan.py` on baseline `5b1e5e4`: 7 HIGH, 7 MEDIUM, exit 1. On a reconstruction of the README's "vulnerable baseline" it reports public SSH, `block_public_acls = false` and a `Principal: "*"` grant as CRITICAL, and `Action: "*"` as HIGH. On an empty directory it exits 2.
+- `index.html` in headless Chromium: no console or page errors. The digest shown for a record matches an independent SHA-256 of that record. A Reset while the digest is computing leaves the stream empty.
+- **Not verified:** nothing was applied to LocalStack or AWS. Some services used here (for example GuardDuty, Security Hub, AWS Backup and ELB) may need LocalStack Pro or a real account to `apply`.
