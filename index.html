@@ -751,7 +751,7 @@ footer {
       <div class="hdr-chip">GRC_5×5</div>
       <div class="hdr-chip">ISO_27005</div>
       <div class="hdr-sep"></div>
-      <div class="hdr-chip">Session_88A</div>
+      <div class="hdr-chip">Local_Session</div>
       <div class="hdr-sep"></div>
       <div class="hdr-clock mono" id="hdr-clock">00:00:00</div>
     </div>
@@ -769,12 +769,12 @@ footer {
         <span class="glitch" data-text="Threat">Nist</span>
         <span class="accent"> Risk</span><br>Assessment Dashboard
       </h1>
-      <p class="hero-sub">NIST SP 800-30 Rev.1 compliant probabilistic risk assessment. Map likelihood against impact severity across a 5×5 coordinate matrix — support consistent risk assessment decisions, not noise.</p>
+      <p class="hero-sub">Likelihood × impact risk scoring aligned with NIST SP 800-30 Rev.1 concepts. Map likelihood against impact severity across a 5×5 coordinate matrix — support consistent risk assessment decisions, not noise.</p>
       <div class="hero-badges">
         <div class="badge"><div class="dot green"></div>Assessment Ready</div>
-        <div class="badge"><div class="dot cyan"></div>Session Active</div>
-        <div class="badge"><div class="dot amber"></div>Enc_AES-256-GCM</div>
-        <div class="badge"><div class="dot cyan"></div>NIST_Compliant</div>
+        <div class="badge"><div class="dot cyan"></div>Client-Side Only</div>
+        <div class="badge"><div class="dot amber"></div>Inputs Stay In This Browser</div>
+        <div class="badge"><div class="dot cyan"></div>SP 800-30 Aligned</div>
       </div>
     </div>
     <div class="hero-radar" id="radarWrap">
@@ -938,15 +938,15 @@ footer {
         <div class="tm-body" id="protoText">—</div>
       </div>
       <div class="panel-base tm-panel">
-        <span class="tm-label">Audit Evidence</span>
+        <span class="tm-label">Assessment Record</span>
         <div class="audit-file">
-          <div class="audit-file-icon">ZIP</div>
+          <div class="audit-file-icon">SHA</div>
           <div>
-            <div class="audit-file-name mono" id="auditFileName">ATTACHMENT_0000.ZIP</div>
-            <div class="audit-file-size mono" id="auditFileSize">0.0 KB · AES-256-GCM</div>
+            <div class="audit-file-name mono" id="auditFileName">ASSESSMENT_—</div>
+            <div class="audit-file-size mono" id="auditFileSize">SHA-256 · —</div>
           </div>
         </div>
-        <div class="tm-body">Assessment evidence from the primary ingress gateway during peak observed event window. Chain of custody maintained.</div>
+        <div class="tm-body">SHA-256 digest of this assessment (inputs, score, tier, timestamp), computed in your browser. Recompute it to check the record has not been altered. Nothing is transmitted or stored.</div>
       </div>
     </div>
 
@@ -957,10 +957,10 @@ footer {
 <footer>
   <div class="ft-left">
     <div class="ft-status"><div class="ft-dot green"></div><span class="ft-lbl">Assessment Ready</span></div>
-    <div class="ft-status"><div class="ft-dot cyan"></div><span class="ft-lbl">Session Active</span></div>
+    <div class="ft-status"><div class="ft-dot cyan"></div><span class="ft-lbl">Client-Side Only</span></div>
     <div class="ft-status"><div class="ft-dot gray" id="ftPhaseDot"></div><span class="ft-lbl" id="ftPhaseLbl">Idle</span></div>
   </div>
-  <div class="ft-right mono" id="ftMeta">Terminal_Session 8829-001-ALPHA // 00:00:00</div>
+  <div class="ft-right mono" id="ftMeta">Local_Session // 00:00:00</div>
 </footer>
 
 <!-- ══════════════════════════════════════════
@@ -1007,7 +1007,7 @@ function nowTs(){ const d=new Date(); return `${p2(d.getHours())}:${p2(d.getMinu
 function tickClock(){
   const t=nowTs();
   document.getElementById("hdr-clock").textContent=t;
-  document.getElementById("ftMeta").textContent=`Terminal_Session 8829-001-ALPHA // ${t}`;
+  document.getElementById("ftMeta").textContent=`Local_Session // ${t}`;
 }
 setInterval(tickClock,1000); tickClock();
 
@@ -1016,7 +1016,7 @@ const preStatuses = [
   "INITIALIZING RISK ASSESSMENT…",
   "LOADING NIST SP 800-30 FRAMEWORK…",
   "CALIBRATING THREAT MATRICES…",
-  "ESTABLISHING SECURE CHANNEL…",
+  "LOADING SCORING BANDS…",
   "SYSTEM ONLINE",
 ];
 let pIdx=0;
@@ -1268,9 +1268,30 @@ function appendLog(tag,tone,text){
 /* ══ EXECUTE ════════════════════════════════ */
 function clearTimers(){ timers.forEach(clearTimeout); timers=[]; }
 
-document.getElementById("execBtn").onclick=()=>{
+function bandRuleFor(s){
+  if (s >= 20) return "SCORE ≥ 20";
+  if (s >= 12) return "12 ≤ SCORE < 20";
+  if (s >= 6)  return "6 ≤ SCORE < 12";
+  return "SCORE < 6";
+}
+function protocolFor(s){
+  return s>=20?"DEFCON_2_ELEVATION":s>=12?"DEFCON_3_MITIGATION":s>=6?"DEFCON_4_MONITORED":"DEFCON_5_NOMINAL";
+}
+
+/* SHA-256 over the assessment record. Web Crypto needs a secure context (https or localhost). */
+async function digestRecord(record){
+  if(!(window.crypto&&crypto.subtle)) return null;
+  const bytes=new TextEncoder().encode(JSON.stringify(record));
+  const buf=await crypto.subtle.digest("SHA-256",bytes);
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+let runId=0;
+
+document.getElementById("execBtn").onclick=async()=>{
   if(!likelihood||!impact) return;
   clearTimers();
+  const run=++runId;
   phase="arming";
   document.getElementById("execLbl").textContent="Computing…";
   document.getElementById("execBtn").disabled=true;
@@ -1280,22 +1301,32 @@ document.getElementById("execBtn").onclick=()=>{
 
   const s=likelihood*impact;
   const t=tierFor(s);
+  const L=LIKELIHOOD[likelihood-1], I=IMPACT[impact-1];
+  const record={
+    version:1,
+    assessedAt:new Date().toISOString(),
+    likelihood:{ value:L.v, label:L.label },
+    impact:{ value:I.v, label:I.label },
+    score:s,
+    tier:t.label,
+  };
+  const digest=await digestRecord(record);
+  if(run!==runId) return; // reset while hashing
   scoreHistory.push(s);
   updateSparkline();
 
-  const fakeCVE=`CVE-2024-${Math.floor(10000+Math.random()*89999)}`;
-  const fakeHash=Math.random().toString(16).slice(2,10)+Math.random().toString(16).slice(2,6);
-
+  // Every line below is derived from the user's inputs; nothing is simulated
   const stream=[
-    { tag:"SYS",   tone:"tone-sys",   delay:0,   text:"INITIALIZING_RISK_COORDINATES…" },
-    { tag:"DATA",  tone:"tone-data",  delay:260,  text:`MAPPING VECTOR: LIKELIHOOD_${p2(likelihood)} × IMPACT_${p2(impact)}` },
-    { tag:"DATA",  tone:"tone-data",  delay:520,  text:"PROBING CORE INFRASTRUCTURE EXPOSURE SURFACE…" },
-    { tag:"INTEL", tone:"tone-intel", delay:800,  text:`THREAT INTEL LOCKED: ${fakeCVE} [EPSS: ${(Math.random()*0.95).toFixed(3)}]` },
-    { tag:"DATA",  tone:"tone-data",  delay:1060, text:`CVSS BASE SCORE: ${(3.0+Math.random()*7).toFixed(1)} · VECTOR: AV:N/AC:L/PR:N` },
-    { tag:"EVAL",  tone:"tone-eval",  delay:1340, text:`NIST_SP_800-30 CROSS-REFERENCE: TIER ${t.label.toUpperCase()}` },
-    { tag: s>=20?"ALERT":"OK", tone: s>=20?"tone-alert":"tone-ok", delay:1620,
-      text: s>=20 ? "⚠ CRITICAL_VARIANCE_DETECTED — IMMEDIATE ESCALATION REQUIRED" : "CALCULATION COMPLETE. RISK SCORE VALIDATED." },
-    { tag:"SYS",   tone:"tone-sys",   delay:1900, text:`AUDIT_HASH: 0x${fakeHash} · LOGGED TO SIEM` },
+    { tag:"SYS",   tone:"tone-sys",   delay:0,    text:"INITIALIZING_RISK_COORDINATES…" },
+    { tag:"DATA",  tone:"tone-data",  delay:260,  text:`MAPPING VECTOR: LIKELIHOOD_${p2(L.v)} (${L.label.toUpperCase()}) × IMPACT_${p2(I.v)} (${I.label.toUpperCase()})` },
+    { tag:"DATA",  tone:"tone-data",  delay:520,  text:`SCORE = L × I = ${p2(L.v)} × ${p2(I.v)} = ${p2(s)} / 25` },
+    { tag:"EVAL",  tone:"tone-eval",  delay:800,  text:`BAND RULE: ${bandRuleFor(s)} → TIER ${t.label.toUpperCase()}` },
+    { tag:"EVAL",  tone:"tone-eval",  delay:1060, text:`RESPONSE PROTOCOL: ${protocolFor(s)}` },
+    { tag: s>=20?"ALERT":"OK", tone: s>=20?"tone-alert":"tone-ok", delay:1340,
+      text: s>=20 ? "⚠ CRITICAL BAND — ESCALATION RECOMMENDED" : "CALCULATION COMPLETE." },
+    { tag:"SYS",   tone:"tone-sys",   delay:1620,
+      text: digest ? `RECORD DIGEST: SHA-256 ${digest.slice(0,16)}… · NOT TRANSMITTED`
+                   : "RECORD DIGEST UNAVAILABLE: WEB CRYPTO NEEDS HTTPS OR LOCALHOST" },
   ];
 
   document.getElementById("logBody").innerHTML="";
@@ -1307,14 +1338,14 @@ document.getElementById("execBtn").onclick=()=>{
     const timer=setTimeout(()=>{
       appendLog(line.tag,line.tone,line.text);
       if(i===2) document.getElementById("ind2").className="log-ind on";
-      if(i===stream.length-1){ document.getElementById("ind3").className="log-ind done"; finalize(s,t); }
+      if(i===stream.length-1){ document.getElementById("ind3").className="log-ind done"; finalize(s,t,record,digest); }
     }, line.delay);
     timers.push(timer);
   });
 };
 
 /* ══ FINALIZE ═══════════════════════════════ */
-function finalize(s,t){
+function finalize(s,t,record,digest){
   phase="result";
   document.getElementById("execLbl").textContent="Execute Calculation";
   document.getElementById("ftPhaseDot").className="ft-dot gray";
@@ -1346,7 +1377,7 @@ function finalize(s,t){
             "Within accepted tolerance bands. Log for quarterly risk audit. No immediate action required.";
 
   const protoBadge=document.getElementById("protoBadge");
-  const code=s>=20?"DEFCON_2_ELEVATION":s>=12?"DEFCON_3_MITIGATION":s>=6?"DEFCON_4_MONITORED":"DEFCON_5_NOMINAL";
+  const code=protocolFor(s);
   protoBadge.className=`proto-badge ${t.cls}`;
   protoBadge.textContent=code;
 
@@ -1356,9 +1387,12 @@ function finalize(s,t){
     s>=6  ? "Document findings, schedule remediation sprint, verify access controls on affected surface." :
             "Log findings. Include in next scheduled security review. No elevated response required.";
 
-  const fsize=Math.floor(s*37.4+120);
-  document.getElementById("auditFileName").textContent=`ATTACHMENT_${String(s*37).padStart(4,"0")}_EVIDENCE.ZIP`;
-  document.getElementById("auditFileSize").textContent=`${fsize}.${Math.floor(Math.random()*9)} KB · AES-256-GCM`;
+  const recName=document.getElementById("auditFileName");
+  recName.textContent=`ASSESSMENT_${record.assessedAt.replace(/[-:]/g,"").slice(0,15)}Z`;
+  recName.title=JSON.stringify(record);
+  const recDigest=document.getElementById("auditFileSize");
+  recDigest.textContent=digest ? `SHA-256 · ${digest.slice(0,24)}…` : "SHA-256 · unavailable (needs HTTPS)";
+  recDigest.title=digest||"";
 }
 
 /* ══ COUNT ANIMATION ════════════════════════ */
@@ -1376,6 +1410,7 @@ function animateCount(el,from,to,dur){
 /* ══ RESET ══════════════════════════════════ */
 document.getElementById("resetBtn").onclick=()=>{
   clearTimers();
+  runId++;
   likelihood=null; impact=null; phase="idle";
   document.getElementById("logBody").innerHTML=`<div class="log-empty">Awaiting parameters — execute calculation to stream evidence</div>`;
   document.getElementById("scoreVal").textContent="00";
