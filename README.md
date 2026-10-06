@@ -55,12 +55,29 @@ A full read-only assessment against 16 NIST SP 800-53 control families lives in 
 | Assessment integrity | Dashboard no longer shows random CVE/CVSS/EPSS values or a fake audit hash; every evidence line is derived from the inputs and the record carries a real SHA-256 digest | `index.html` |
 | Scanner | `scan.py` rebuilt as a pipeline gate (see Phase 2) | `scan.py`, `tests/` |
 
+### Phase 5: Phase 1 Remediation (Moderate findings)
+
+| Area | Change | Files |
+|---|---|---|
+| Network boundary | Public subnets hold only the load balancer; application instances run in private subnets with no internet route and reach AWS through S3 gateway and SSM/Logs interface endpoints. Deny-by-default egress. WAF (AWS managed rule groups plus per-IP rate limit) with redacted logging. Default security group closed. | `main.tf`, `alb.tf` |
+| Instances | Latest Amazon Linux 2023 resolved from Amazon's own images, IMDSv2 only, encrypted gp3 root volume and EBS encryption by default, detailed monitoring. SSH removed: administration goes through SSM Session Manager, with every session recorded to an encrypted log group. | `main.tf`, `iam.tf`, `logging.tf` |
+| Regulated data | Customer-managed KMS keys that separate key administration from key use. PHI under `phi/` must use its own key, which the break-glass role cannot decrypt. The app role reaches the bucket only through the VPC endpoint. Lifecycle rules, GuardDuty Malware Protection for S3, weekly Macie discovery. Replication keeps PII and PHI on separate keys in the replica region. | `kms.tf`, `s3.tf`, `detect.tf` |
+| Configuration | No credentials in code. LocalStack is a variable (`use_localstack`), the app role is managed in Terraform, `default_tags` on every resource, AWS provider 6.x pinned by `.terraform.lock.hcl`. | `providers.tf`, `iam.tf`, `.terraform.lock.hcl` |
+| Pipeline | `security` workflow on every pull request: `terraform fmt`/`validate` against the lock file, `scan.py` at `--fail-on MEDIUM`, Checkov, and gitleaks over the full history. Actions are pinned to commit SHAs. Dependabot and `SECURITY.md` added. | `.github/`, `SECURITY.md` |
+| Dashboard | Risk level comes from NIST SP 800-30 Table I-2 in one table (L × I is shown only as a ranking aid). Assessments are saved to a register with JSON and CSV export. CSS, JS and fonts are self-hosted so a strict Content Security Policy applies; no third-party requests. | `index.html`, `assets/` |
+
 ## Running Locally (LocalStack)
 
 ```bash
-awslocal s3 mb s3://fintech-terraform-state          # one-time: bucket for remote state
+export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test   # LocalStack accepts any credentials
+awslocal s3 mb s3://fintech-terraform-state               # one-time: bucket for remote state
 terraform init -backend-config=backend.localstack.hcl
-terraform plan
+terraform plan -var ami_id=<any AMI ID LocalStack lists>
 ```
 
-Use `terraform init -backend=false` for validation-only runs. Some services used by the Phase 0 controls (for example GuardDuty, Security Hub, AWS Backup and Elastic Load Balancing) may require LocalStack Pro or a real AWS account to `apply`. The load balancer certificate is issued only after the DNS records in the `acm_validation_records` output exist.
+- Use `terraform init -backend=false` for validation-only runs.
+- For a real AWS account, set `use_localstack = false`, use your normal AWS credentials, and drop `ami_id` so the latest Amazon Linux 2023 image is used.
+- Some services used here (for example GuardDuty, Security Hub, Macie, WAF, AWS Backup and Elastic Load Balancing) may require LocalStack Pro or a real AWS account to `apply`.
+- The load balancer certificate is issued only after the DNS records in the `acm_validation_records` output exist.
+- The load balancer has deletion protection on. Set `enable_deletion_protection = false` in `alb.tf` and apply before `terraform destroy`.
+- The dashboard is static: open `index.html` through any web server (`python3 -m http.server`). Web Crypto, used for record digests, needs `https://` or `localhost`.
