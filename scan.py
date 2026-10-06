@@ -19,6 +19,7 @@ from pathlib import Path
 
 SEVERITIES = ["INFO", "MEDIUM", "HIGH", "CRITICAL"]
 WEB_PORTS = {80, 443}
+ADMIN_PORTS = {22, 3389}
 WORLD_CIDRS = {"0.0.0.0/0", "::/0"}
 
 
@@ -248,11 +249,14 @@ class Scanner:
         self.blocks_by_file = blocks_by_file
         self.line_lookup = line_lookup
         self.resources = {}   # type -> list[Block]
+        self.data_sources = {}
         self.providers = []
         for blocks in blocks_by_file.values():
             for b in blocks:
                 if b.kind == "resource" and len(b.labels) == 2:
                     self.resources.setdefault(b.labels[0], []).append(b)
+                elif b.kind == "data" and len(b.labels) == 2:
+                    self.data_sources.setdefault(b.labels[0], []).append(b)
                 elif b.kind == "provider":
                     self.providers.append(b)
 
@@ -265,11 +269,13 @@ class Scanner:
     def run(self):
         self.check_security_groups()
         self.check_policies()
+        self.check_policy_documents()
         self.check_buckets()
         self.check_audit_and_detection()
         self.check_identity()
         self.check_compute()
         self.check_listeners()
+        self.check_waf()
         self.check_providers()
         order = {s: i for i, s in enumerate(SEVERITIES)}
         self.findings.sort(key=lambda f: (-order[f.severity], f.file, f.line))
@@ -286,10 +292,17 @@ class Scanner:
                 return None
 
         def judge(blk, rule_block, from_v, to_v, proto, cidrs, direction):
-            if not (set(cidrs) & WORLD_CIDRS):
-                return
             rng = ports(from_v, to_v, proto)
             where = f"{blk.address} {direction}"
+            world = bool(set(cidrs) & WORLD_CIDRS)
+            if direction == "ingress" and cidrs and not world:
+                admin = ADMIN_PORTS if rng is None else ADMIN_PORTS & set(range(rng[0], rng[1] + 1))
+                if admin:
+                    self.add("TF-AC17-01", "MEDIUM", "AC-17",
+                             f"{where}: remote administration port {', '.join(map(str, sorted(admin)))} reachable over the network; "
+                             "use SSM Session Manager", blk, rule_block.line)
+            if not world:
+                return
             if direction == "ingress":
                 if rng is None or not set(range(rng[0], rng[1] + 1)) <= WEB_PORTS:
                     label = "all ports" if rng is None else f"port {rng[0]}" + (f"-{rng[1]}" if rng[1] != rng[0] else "")
@@ -333,6 +346,25 @@ class Scanner:
                     if "Condition" not in attrs and (literal(principal) == "*" or re.search(r'AWS"?\s*[=:]\s*"\*"', principal)):
                         self.add("TF-AC3-01", "CRITICAL", "AC-3",
                                  f"{b.address}: Allow statement grants access to any principal (\"*\")", b, line)
+
+    # AC-6 / AC-3 for policies written as aws_iam_policy_document data sources
+    def check_policy_documents(self):
+        for doc in self.data_sources.get("aws_iam_policy_document", []):
+            for st in doc.children:
+                if st.kind != "statement" or (literal(st.attr("effect")) or "Allow") != "Allow":
+                    continue
+                address = f"data.{doc.address}"
+                wild = [a for a in strings_in(st.attr("actions")) if a == "*" or re.fullmatch(r"[\w-]+:\*", a)]
+                if wild:
+                    self.add("TF-AC6-01", "HIGH", "AC-6",
+                             f"{address}: Allow statement grants wildcard action {', '.join(wild)}", doc, st.line)
+                if st.attr("not_actions"):
+                    self.add("TF-AC6-02", "HIGH", "AC-6",
+                             f"{address}: Allow statement uses not_actions (grants everything not listed)", doc, st.line)
+                public = any("*" in strings_in(p.attr("identifiers")) for p in st.children if p.kind == "principals")
+                if public and not st.child("condition"):
+                    self.add("TF-AC3-01", "CRITICAL", "AC-3",
+                             f"{address}: Allow statement grants access to any principal (\"*\")", doc, st.line)
 
     # AC-3, CP-9, SC-8, SC-28, AU-12: S3 bucket posture
     def check_buckets(self):
@@ -378,6 +410,14 @@ class Scanner:
             if name not in sse:
                 self.add("TF-SC28-01", "MEDIUM", "SC-28",
                          f"{bucket.address}: no explicit server-side encryption configuration", bucket)
+            elif re.search(r'DataClass"?\s*=\s*"[^"]*(PII|PHI)', bucket.attr("tags") or ""):
+                kms = any(
+                    literal(d.attr("sse_algorithm")) in ("aws:kms", "aws:kms:dsse")
+                    for cfg in sse[name] for rule in cfg.children if rule.kind == "rule"
+                    for d in rule.children if d.kind == "apply_server_side_encryption_by_default")
+                if not kms:
+                    self.add("TF-SC28-03", "MEDIUM", "SC-28(1)",
+                             f"{bucket.address}: PII/PHI bucket is not encrypted with a KMS key", bucket)
             if name not in logging and name not in log_targets:
                 self.add("TF-AU12-01", "MEDIUM", "AU-12", f"{bucket.address}: server access logging is not enabled", bucket)
 
@@ -443,6 +483,19 @@ class Scanner:
             action = b.child("default_action")
             if not action or literal(action.attr("type")) != "redirect":
                 self.add("TF-SC8-02", "HIGH", "SC-8", f"{b.address}: HTTP listener serves traffic instead of redirecting to HTTPS", b)
+
+    # SC-7 / SI-4: internet-facing application load balancers need a web application firewall
+    def check_waf(self):
+        protected = {referenced_name(a.attr("resource_arn"), "aws_lb")
+                     for a in self.of("aws_wafv2_web_acl_association")}
+        for lb in self.of("aws_lb") + self.of("aws_alb"):
+            if literal(lb.attr("internal")) == "true":
+                continue
+            if (literal(lb.attr("load_balancer_type")) or "application") != "application":
+                continue
+            if lb.labels[1] not in protected:
+                self.add("TF-SC7-03", "MEDIUM", "SC-7",
+                         f"{lb.address}: internet-facing load balancer has no WAF web ACL association", lb)
 
     # IA-5(7): credentials embedded in configuration
     def check_providers(self):

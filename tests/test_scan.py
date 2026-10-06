@@ -203,10 +203,96 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(run_scan(hcl)[0], 0)
         self.assertEqual(run_scan(hcl, "--fail-on", "MEDIUM")[0], 1)
 
+    def test_ssh_from_private_range_is_flagged_as_remote_admin(self):
+        _, rules = run_scan({"main.tf": """
+            resource "aws_security_group" "sg" {
+              ingress {
+                from_port   = 22
+                to_port     = 22
+                protocol    = "tcp"
+                cidr_blocks = ["192.168.1.50/32"]
+              }
+            }
+        """})
+        self.assertIn("TF-AC17-01", rules)
+        self.assertNotIn("TF-SC7-01", rules)
+
+    def test_public_alb_requires_waf_association(self):
+        lb = """
+            resource "aws_lb" "public" {
+              internal = false
+            }
+            resource "aws_lb" "private" {
+              internal = true
+            }
+        """
+        _, rules = run_scan({"lb.tf": lb})
+        self.assertEqual(len(rules["TF-SC7-03"]), 1)
+        _, rules = run_scan({"lb.tf": lb + """
+            resource "aws_wafv2_web_acl_association" "a" {
+              resource_arn = aws_lb.public.arn
+              web_acl_arn  = "arn"
+            }
+        """})
+        self.assertNotIn("TF-SC7-03", rules)
+
+    def test_pii_bucket_must_use_kms(self):
+        bucket = SECURE_BUCKET.replace('bucket = "data"', 'bucket = "data"\n  tags = { DataClass = "PII" }')
+        sse = """
+            resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+              bucket = aws_s3_bucket.data.id
+              rule {
+                apply_server_side_encryption_by_default {
+                  sse_algorithm = "%s"
+                }
+              }
+            }
+        """
+        _, rules = run_scan({"s3.tf": bucket, "sse.tf": sse % "AES256"})
+        self.assertIn("TF-SC28-03", rules)
+        _, rules = run_scan({"s3.tf": bucket, "sse.tf": sse % "aws:kms"})
+        self.assertNotIn("TF-SC28-03", rules)
+
+    def test_policy_document_data_sources_are_checked(self):
+        _, rules = run_scan({"iam.tf": """
+            data "aws_iam_policy_document" "bad" {
+              statement {
+                actions   = ["s3:*"]
+                resources = ["*"]
+                principals {
+                  type        = "AWS"
+                  identifiers = ["*"]
+                }
+              }
+              statement {
+                effect    = "Allow"
+                actions   = ["kms:Decrypt"]
+                resources = ["*"]
+                principals {
+                  type        = "AWS"
+                  identifiers = ["*"]
+                }
+                condition {
+                  test     = "StringEquals"
+                  variable = "aws:PrincipalArn"
+                  values   = ["arn:aws:iam::111122223333:role/x"]
+                }
+              }
+            }
+        """})
+        self.assertEqual(len(rules["TF-AC6-01"]), 1)
+        self.assertEqual(len(rules["TF-AC3-01"]), 1)
+
     def test_repository_terraform_passes_high_gate(self):
         out = io.StringIO()
         with redirect_stdout(out):
             code = scan.main([str(REPO)])
+        self.assertEqual(code, 0, out.getvalue())
+
+    def test_repository_terraform_has_no_medium_findings(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = scan.main([str(REPO), "--fail-on", "MEDIUM"])
         self.assertEqual(code, 0, out.getvalue())
 
 
