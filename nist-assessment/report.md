@@ -219,7 +219,7 @@ Sorted by score, highest first. Every entry cites file paths and exact line rang
 - **NIST-17: The risk-scoring engine disagrees with itself** · *RA-3, SI-7*
   - **Detail:** `tierFor()` uses bands of 20 and up / 12 / 6, while `cellTone()` uses 20 and up / 15 / 10 / 6. Scores 10-11 render in "high" colour but are labelled *Moderate*, and the "very-high" tone (15-19) has no matching tier. The UI also claims "NIST SP 800-30 Rev.1 compliant" while using a multiplicative 1-25 scale that 800-30 Appendices G-I do not define. Results are not traceable to the cited method.
   - **L 4 · I 2 · Score 8 · Moderate**
-  - **Files:** `index.html:990-1002`, `index.html:772`, `index.html:1308-1357`
+  - **Files:** `index.html:990-1002`, `index.html:772`, `index.html:1317-1362`
 
 - **NIST-18: Assessments are not persisted or exportable** · *AU-3, CP-9, RA-3(1)*
   - **Detail:** Scores live in an in-memory array, and Reset or a page reload erases them. No export, timestamped record or assessor identity is kept, so a risk decision cannot be reconstructed.
