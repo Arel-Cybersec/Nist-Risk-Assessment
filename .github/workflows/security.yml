@@ -7,29 +7,34 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned to full commit SHAs (supply-chain control, F-09); Dependabot keeps them current.
 jobs:
   terraform:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dir: [".", "vulnerable"]
+        include:
+          - { dir: ".", init_flags: "-lockfile=readonly" }
+          - { dir: "org", init_flags: "-lockfile=readonly" }
+          # The baseline is intentionally unpinned (finding F-09), so no lock file there
+          - { dir: "vulnerable", init_flags: "" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.9.8
       - name: Format
         run: terraform fmt -check -recursive
         working-directory: ${{ matrix.dir }}
-      - name: Validate
-        run: terraform init -backend=false -input=false && terraform validate
+      - name: Validate (provider checksums enforced by .terraform.lock.hcl)
+        run: terraform init -backend=false -input=false ${{ matrix.init_flags }} && terraform validate
         working-directory: ${{ matrix.dir }}
 
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - name: Unit tests
@@ -43,13 +48,39 @@ jobs:
             exit 1
           fi
 
+  opa:
+    runs-on: ubuntu-latest
+    env:
+      CONFTEST_VERSION: "0.56.0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install conftest (checksum verified)
+        run: |
+          base="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}"
+          file="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl -sSfLO "$base/$file"
+          curl -sSfL "$base/checksums.txt" | grep " $file\$" | sha256sum -c -
+          tar -xzf "$file" conftest
+          sudo install conftest /usr/local/bin/conftest
+      - name: Policy unit tests
+        run: conftest verify -p policy
+      - name: OPA gate (hardened config must pass)
+        run: conftest test --parser hcl2 --combine *.tf
+      - name: OPA gate (vulnerable baseline must fail)
+        working-directory: vulnerable
+        run: |
+          if conftest test --parser hcl2 --combine -p ../policy *.tf; then
+            echo "::error::OPA policies did not block the vulnerable baseline"
+            exit 1
+          fi
+
   checkov:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: pip install checkov==3.3.29
-      - name: Checkov (hardened config)
+      - name: Checkov (hardened config and org guardrails)
         run: checkov -d . --framework terraform --skip-path vulnerable --compact
