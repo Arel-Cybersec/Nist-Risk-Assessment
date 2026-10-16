@@ -168,3 +168,54 @@ deny contains msg if {
 	not r.permissions_boundary
 	msg := sprintf("F-08 aws_iam_role.%s: human-assumable role without a permissions boundary", [n])
 }
+
+# ── F-11 Recoverability ──────────────────────────────────────────────
+deny contains "F-11 no aws_backup_plan (no point-in-time recovery)" if {
+	count(input) > 0
+	count(object.get(resources, "aws_backup_plan", {})) == 0
+}
+
+deny contains "F-11 backups are never test-restored (no aws_backup_restore_testing_plan)" if {
+	count(object.get(resources, "aws_backup_plan", {})) > 0
+	count(object.get(resources, "aws_backup_restore_testing_plan", {})) == 0
+}
+
+# ── F-12 Regional resilience ─────────────────────────────────────────
+warn contains "F-12 data is held in a single region (no aws_s3_bucket_replication_configuration)" if {
+	count(object.get(resources, "aws_s3_bucket", {})) > 0
+	count(object.get(resources, "aws_s3_bucket_replication_configuration", {})) == 0
+}
+
+# ── F-13 Managed TLS ─────────────────────────────────────────────────
+deny contains msg if {
+	some n, l in resources.aws_lb_listener
+	l.protocol == "HTTP"
+	not redirects(l)
+	msg := sprintf("F-13 aws_lb_listener.%s: plaintext HTTP that does not redirect to HTTPS", [n])
+}
+
+redirects(l) if {
+	some a in as_list(l.default_action)
+	a.type == "redirect"
+}
+
+deny contains msg if {
+	some n, l in resources.aws_lb_listener
+	l.protocol == "HTTPS"
+	not regex.match(`^ELBSecurityPolicy-(TLS13|TLS-1-2)`, object.get(l, "ssl_policy", ""))
+	msg := sprintf("F-13 aws_lb_listener.%s: TLS below 1.2 allowed", [n])
+}
+
+warn contains msg if {
+	some n, i in resources.aws_instance
+	i.associate_public_ip_address == true
+	msg := sprintf("F-13 aws_instance.%s: public IP; serve it through a TLS load balancer", [n])
+}
+
+warn contains msg if {
+	some n, i in resources.aws_instance
+	some sn, s in resources.aws_subnet
+	contains(i.subnet_id, sprintf("aws_subnet.%s.", [sn]))
+	s.map_public_ip_on_launch == true
+	msg := sprintf("F-13 aws_instance.%s: launched in a subnet that assigns public IPs", [n])
+}

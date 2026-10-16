@@ -25,9 +25,9 @@ resource "aws_kms_key" "data" {
         Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
       },
       {
-        Sid       = "AllowEventBridgeToEncryptedTopics"
+        Sid       = "AllowServicesToEncryptedTopics"
         Effect    = "Allow"
-        Principal = { Service = ["events.amazonaws.com", "config.amazonaws.com"] }
+        Principal = { Service = ["events.amazonaws.com", "config.amazonaws.com", "backup.amazonaws.com"] }
         Action    = ["kms:GenerateDataKey*", "kms:Decrypt"]
         Resource  = "*"
         Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
@@ -50,7 +50,6 @@ resource "aws_kms_alias" "data" {
 
 # ── Customer data bucket ─────────────────────────────────────────────
 resource "aws_s3_bucket" "fintech_storage" {
-  #checkov:skip=CKV_AWS_144:Cross-region replication is a DR decision outside this assessment's scope
   #checkov:skip=CKV2_AWS_62:Event notifications are not required by any finding in the risk register
   bucket = "simulated-fintech-customer-data-2026"
 
@@ -242,6 +241,13 @@ resource "aws_s3_bucket_policy" "audit_logs" {
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.audit_logs.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+      },
+      {
+        Sid       = "AlbAccessLogs"
+        Effect    = "Allow"
+        Principal = { AWS = data.aws_elb_service_account.main.arn }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.audit_logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
       },
       {
         Sid       = "ConfigAclCheck"

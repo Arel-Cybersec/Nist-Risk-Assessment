@@ -18,7 +18,7 @@ class ScanTest(unittest.TestCase):
     def test_vulnerable_baseline_flags_every_finding(self):
         ids = {f["id"] for f in scan.scan(ROOT / "vulnerable")}
         # F-08 needs a human-assumable role, which the baseline does not have (it uses an IAM user)
-        self.assertEqual(ids, {"F-01", "F-02", "F-03", "F-04", "F-05", "F-06", "F-07", "F-09"})
+        self.assertEqual(ids, {"F-01", "F-02", "F-03", "F-04", "F-05", "F-06", "F-07", "F-09", "F-11", "F-12", "F-13"})
         self.assertEqual(scan.main([str(ROOT / "vulnerable")]), 1)
 
     def test_hardened_root_is_clean(self):
@@ -102,6 +102,30 @@ resource "aws_security_group_rule" "egress_ok" {
         self.assertIn(("F-07", "No enabled GuardDuty detector (no runtime threat detection)"), missing)
         self.assertIn(("F-07", "No AWS Config recorder (configuration drift is not monitored)"), missing)
         self.assertIn(("F-09", "No .terraform.lock.hcl (provider checksums are not pinned)"), missing)
+
+    def test_cloudtrail_data_events_count_as_bucket_logging(self):
+        bucket = 'resource "aws_s3_bucket" "b" {\n  bucket = "x"\n}\n'
+        unlogged = {h[2] for h in scan_text(bucket)}
+        self.assertIn("S3 bucket access is not logged (no server access logs or CloudTrail data events)", unlogged)
+        trail = ('resource "aws_cloudtrail" "t" {\n  event_selector {\n    data_resource {\n'
+                 '      values = ["${aws_s3_bucket.b.arn}/"]\n    }\n  }\n}\n')
+        self.assertNotIn("S3 bucket access is not logged (no server access logs or CloudTrail data events)",
+                         {h[2] for h in scan_text(bucket + trail)})
+
+    def test_listeners_need_modern_tls(self):
+        weak = scan_text('resource "aws_lb_listener" "l" {\n  protocol = "HTTPS"\n  ssl_policy = "ELBSecurityPolicy-2016-08"\n}')
+        self.assertIn("F-13", {h[0] for h in weak})
+        plain = scan_text('resource "aws_lb_listener" "l" {\n  protocol = "HTTP"\n  default_action {\n    type = "forward"\n  }\n}')
+        self.assertIn("F-13", {h[0] for h in plain})
+        redirect = scan_text('resource "aws_lb_listener" "l" {\n  protocol = "HTTP"\n  default_action {\n    type = "redirect"\n  }\n}')
+        modern = scan_text('resource "aws_lb_listener" "l" {\n  protocol = "HTTPS"\n  ssl_policy = "ELBSecurityPolicy-TLS13-1-3-2021-06"\n}')
+        self.assertNotIn("F-13", {h[0] for h in redirect | modern})
+
+    def test_backup_without_restore_testing_is_flagged(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "t.tf").write_text('resource "aws_backup_plan" "p" {\n  name = "p"\n}\n')
+            msgs = {f["message"] for f in scan.scan(d) if f["id"] == "F-11"}
+        self.assertEqual(msgs, {"Backups are never test-restored (no restore testing plan)"})
 
     def test_commented_out_code_is_ignored(self):
         self.assertEqual(scan_text('# resource "aws_iam_user" "u" { name = "x" }\n'), set())

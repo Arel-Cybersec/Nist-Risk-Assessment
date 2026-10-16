@@ -21,7 +21,8 @@ repository actually produces.
 | EventBridge `fintech-security-tampering` (CloudTrail/GuardDuty/Config stopped or deleted) | **SEV-1** |
 | Config rule NON_COMPLIANT on `s3-public-read-prohibited`, `s3-public-write-prohibited` or `ssh-restricted` | **SEV-1** |
 | GuardDuty finding, severity 4–6.9 | SEV-2 |
-| Any other Config rule NON_COMPLIANT, or a "Infrastructure drift detected" issue | SEV-3 |
+| AWS Backup restore test completed with a failed status (`RESTORE_JOB_COMPLETED` notification) | SEV-2 |
+| Any other Config rule NON_COMPLIANT, or an "Infrastructure drift detected" issue | SEV-3 |
 
 SEV-1: start within 15 minutes, notify the incident lead immediately.
 SEV-2: same working day. SEV-3: next working day.
@@ -86,9 +87,19 @@ Trigger: the daily `drift` workflow opens "Infrastructure drift detected", or a 
 2. Either revert by running `terraform apply`, or make the change properly through a pull request (which passes every security gate).
 3. If it was an emergency change, record it in the register as an accepted risk until the code catches up.
 
+## Playbook E: data loss or failed restore test
+
+Trigger: deleted or corrupted data, ransomware, or a weekly restore test that did not succeed.
+
+1. **Stop the damage** (RS.MI-01): if data is being deleted or encrypted, follow Playbook B to contain the principal or instance first.
+2. **Choose the restore source** (RC.RP-02): the most recent clean recovery point in `fintech-vault` (or `fintech-vault-dr` if the primary region is impaired); for S3 objects, the previous object version or the replica bucket in the DR region.
+3. **Verify before use** (RC.RP-03): restore to a new volume first and check it, exactly as the weekly restore test does.
+4. **Failed restore test**: treat backups as untrusted until the cause is fixed; record it in the register (F-11 residual risk rises until a test passes again).
+
 ## Recovery assets
 
-- **S3 objects:** versioning on both buckets, so deleted or overwritten objects can be restored (RC.RP-03: check the restored version's integrity before using it).
+- **S3 objects:** versioning on every bucket, plus a continuously replicated copy in the DR region (`dr.tf`).
+- **Instance data:** daily AWS Backup recovery points (35 days) in a locked vault, copied to the DR region and test-restored weekly (`backup.tf`).
 - **Infrastructure:** fully rebuilt from Terraform; the code itself is protected by the `main` branch ruleset.
 - **Audit trail:** CloudTrail log file validation proves the logs have not been altered: `aws cloudtrail validate-logs --trail-arn <arn> --start-time <time>`.
 
