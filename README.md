@@ -5,7 +5,10 @@
 ## Project Overview
 This project bridges the gap between Governance, Risk, and Compliance (GRC) frameworks and hands-on technical execution. It runs a full DevSecOps lifecycle: a **NIST Cybersecurity Framework (CSF) 2.0** risk assessment of a deliberately misconfigured AWS environment, the infrastructure-as-code (IaC) that remediates it, automated gates in CI that block unsafe changes, runtime monitoring for the live account, and the governance artefacts (supply chain, incident response) that CSF 2.0 expects alongside the technical controls.
 
-**Report:** open [`index.html`](index.html) for the interactive risk assessment report. It covers the risk register, the inherent → residual risk matrix, before/after Terraform, control mapping and scan evidence, and exports to CSV, JSON or PDF.
+**Live report:** https://arel-cybersec.github.io/Nist-Risk-Assessment/ (or open [`index.html`](index.html) locally). It is laid out as a formal assessment document:
+* **Interactive risk matrix:** switch between inherent and residual risk, *Play remediation* to watch each finding move to its residual level, movement arrows, hover details, and click a cell to filter the register.
+* **Risk register:** sortable and searchable (including by control ID), with the threat, scoring rationale, before/after Terraform, NIST CSF 2.0 and SP 800-53 controls, and scan evidence for every finding.
+* **Control coverage, evidence and an "Add a risk" form**, with exports to CSV, JSON and PDF.
 
 ## The GRC & Cloud Security Scope
 Risks are scored on a **5×5 likelihood × impact matrix** using the five qualitative levels of NIST SP 800-30 Rev. 1 (Very Low → Very High). Remediations are mapped to NIST CSF 2.0 subcategories and NIST SP 800-53 Rev. 5 controls.
@@ -26,15 +29,15 @@ Risks are scored on a **5×5 likelihood × impact matrix** using the five qualit
 
 | ID | Finding | Layer | Inherent | Residual | CSF 2.0 |
 |----|---------|-------|----------|----------|---------|
-| F-01 | Customer PII bucket publicly readable | Data | 25 Critical | 5 Low | PR.AA-05, PR.DS-01, PR.PS-01 |
-| F-02 | Administrative wildcard granted to developers | Identity | 20 Critical | 3 Low | PR.AA-01, PR.AA-03, PR.AA-05 |
+| F-01 | Customer PII bucket publicly readable | Data | 25 Very High | 5 Low | PR.AA-05, PR.DS-01, PR.PS-01 |
+| F-02 | Administrative wildcard granted to developers | Identity | 20 Very High | 3 Very Low | PR.AA-01, PR.AA-03, PR.AA-05 |
 | F-03 | Sensitive data not encrypted at rest | Data | 12 High | 4 Low | PR.DS-01 |
 | F-04 | No audit trail or network monitoring | Detection | 16 High | 4 Low | PR.PS-04, DE.CM-01, DE.CM-03, DE.CM-09 |
-| F-05 | SSH exposed to the internet; plaintext HTTP | Network | 20 Critical | 4 Low | PR.IR-01, PR.DS-02, DE.CM-01 |
+| F-05 | SSH exposed to the internet; plaintext HTTP | Network | 20 Very High | 4 Low | PR.IR-01, PR.DS-02, DE.CM-01 |
 | F-06 | Instance metadata (IMDSv1) and host hardening | Compute | 12 High | 4 Low | PR.PS-01, PR.AA-05 |
 | F-07 | No runtime threat detection or drift monitoring | Detection | 16 High | 4 Low | DE.CM-09, DE.AE-02, DE.AE-06, PR.PS-01 |
 | F-08 | No preventive guardrails or enforced policy gate | Governance | 15 High | 4 Low | PR.AA-05, GV.PO-01, PR.PS-06 |
-| F-09 | Unmanaged software supply chain | Governance | 12 High | 3 Low | GV.SC-04, GV.SC-07, GV.SC-10, PR.PS-02 |
+| F-09 | Unmanaged software supply chain | Governance | 12 High | 3 Very Low | GV.SC-04, GV.SC-07, GV.SC-10, PR.PS-02 |
 | F-10 | No incident response plan | Response | 12 High | **6 Moderate (open)** | RS.MA-02, RS.MI-01, RS.AN-07, RC.RP-03, ID.IM-04 |
 | F-11 | Backups never test-restored | Resilience | 12 High | 3 Very Low | PR.DS-11, RC.RP-03, RC.RP-05 |
 | F-12 | Single-region deployment | Resilience | 8 Moderate | 4 Low | PR.IR-03, RC.RP-02, ID.AM-08 |
@@ -49,7 +52,7 @@ Levels follow the five NIST SP 800-30 qualitative values on a tailored 5×5 scor
 1. **Data (`s3.tf`):** Public access blocks disabled, a wildcard principal, and no encryption, versioning or logging.
 2. **Identity (`iam.tf`):** `"Action": "*"`, `"Resource": "*"` granted to a developer group through a long-lived IAM user.
 3. **Network & compute (`main.tf`):** SSH (22) and HTTP (80) open to `0.0.0.0/0`, IMDSv1, an unencrypted root volume, and no CloudTrail or flow logs.
-4. **Operations:** no runtime detection (GuardDuty, Config), no provider lock file and no incident response plan.
+4. **Operations:** no runtime detection (GuardDuty, Config), no provider lock file, no incident response plan, no backups, a single region and no managed TLS.
 
 ### Phase 2: Automated Compliance Auditing
 ```sh
@@ -72,12 +75,12 @@ checkov -d . --framework terraform --skip-path vulnerable
 | OPA / conftest 0.56.0 | **16 failures**, 3 warnings | 22 passed / **0 failures** |
 | Checkov 3.3.29 | 14 passed / **33 failed** | 256 passed / **0 failed** / 10 skipped* |
 
-\* Each skip has a justification in source (`#checkov:skip=…`), e.g. cross-region replication is out of scope, and the log bucket can't log to itself. Checkov only checks resources that exist, so it cannot see a control that is missing entirely (no GuardDuty, no lock file); `scan.py` and the OPA policies cover those.
+\* Each skip has a justification in source (`#checkov:skip=…`), e.g. the audit log bucket can't log to itself, and the isolation security group is attached only during an incident. Checkov only checks resources that exist, so it cannot see a control that is missing entirely (no GuardDuty, no lock file); `scan.py` and the OPA policies cover those.
 
 ### Phase 3: Technical Remediation & Mitigation
 * **Storage protection:** All four Public Access Blocks enabled, ACLs disabled, SSE-KMS with a rotated customer-managed key, versioning and lifecycle rules, access logging, and a bucket policy limited to the application role that denies non-TLS requests.
 * **Privilege reduction:** The IAM user and wildcard policy are removed. Developers assume an MFA-gated role with access to the data bucket only, and can start or stop only instances tagged `FinTech-Core-App`.
-* **Network segmentation:** No management ports. Admin access uses SSM Session Manager. Inbound and outbound traffic is HTTPS only, the default security group is locked down and public IPs are not auto-assigned.
+* **Network segmentation:** No management ports. Admin access uses SSM Session Manager through private VPC endpoints. The instance has no public IP and accepts HTTPS only from the load balancer; the default security group denies everything.
 * **Instance hardening:** IMDSv2 is required (hop limit 1), the root volume is encrypted, and the instance has a least-privilege role and detailed monitoring.
 * **Detection:** A multi-region CloudTrail with log file validation, KMS encryption, CloudWatch delivery and S3 object-level events, plus VPC flow logs with 365-day retention.
 * **Runtime monitoring and drift (`detect.tf`, `.github/workflows/drift.yml`):** GuardDuty with S3 and EBS malware protection; an AWS Config recorder with 28 managed rules that mirror this register (identifiers taken from AWS's [NIST conformance packs](https://github.com/awslabs/aws-config-rules/tree/master/aws-config-conformance-packs)); EventBridge alerts for GuardDuty findings, Config non-compliance and attempts to disable CloudTrail, GuardDuty or Config; and a daily `terraform plan` against the live account that opens an issue on drift.
@@ -89,7 +92,7 @@ checkov -d . --framework terraform --skip-path vulnerable
 * **Incident response (`governance/incident-response.md`, `SECURITY.md`):** roles, severity levels, and playbooks for each alert this environment raises, plus a pre-built isolation security group.
 
 ## Running it
-By default the Terraform targets [LocalStack](https://github.com/localstack/localstack) on `localhost:4566`; no AWS account is needed. Credentials come from variables (`TF_VAR_localstack_access_key` / `TF_VAR_localstack_secret_key`), which LocalStack accepts with any value. GuardDuty, AWS Config and Organizations are not in LocalStack's free edition, so those resources only fully work against real AWS.
+By default the Terraform targets [LocalStack](https://github.com/localstack/localstack) on `localhost:4566`; no AWS account is needed. Credentials come from variables (`TF_VAR_localstack_access_key` / `TF_VAR_localstack_secret_key`), which LocalStack accepts with any value. Several services used here (GuardDuty, AWS Config, Organizations, AWS Backup, WAF, ELB) may need LocalStack Pro or a real AWS account to apply fully.
 ```sh
 terraform init && terraform validate && terraform plan
 ```
@@ -101,6 +104,17 @@ terraform apply -var use_localstack=false -var alert_email=you@example.com \
 ```
 `domain_name` and `route53_zone_id` create the TLS certificate and HTTPS listener; without them the load balancer has no listener. The second region defaults to `us-west-2` (`dr_region`). Before `terraform destroy`, apply once with `-var deletion_protection=false`.
 Then enable drift detection: create an IAM role for GitHub OIDC with `ReadOnlyAccess` and read access to your state bucket, and set the repository variables `AWS_ROLE_ARN` and `TF_STATE_BUCKET` (optionally `TF_STATE_KEY`, `AWS_REGION`). The organization guardrails are a separate stack applied from the management account; see [`org/README.md`](org/README.md).
+
+## Repository layout
+| Path | Contents |
+|---|---|
+| `*.tf` | Hardened stack: `s3.tf`, `iam.tf`, `main.tf` (network, instance), `edge.tf` (ALB, TLS, WAF), `logging.tf`, `detect.tf`, `backup.tf`, `dr.tf` |
+| `vulnerable/` | The original insecure baseline, kept for before/after comparison |
+| `org/` | Organization guardrails (SCPs, org-wide GuardDuty), applied from the management account |
+| `policy/` | OPA/Rego policies and their tests |
+| `scan.py`, `test_scan.py` | Python policy scanner and its tests |
+| `governance/` | Supplier register and incident response playbook |
+| `index.html` | The interactive report |
 
 ## Continuous integration
 [`.github/workflows/security.yml`](.github/workflows/security.yml) runs on every push and pull request:
