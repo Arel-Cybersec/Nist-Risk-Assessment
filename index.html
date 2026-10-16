@@ -3,1398 +3,629 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title> NIST Risk Assessment </title>
+<title>NIST Risk Assessment Report</title>
+<meta name="description" content="NIST CSF 2.0 risk assessment of a simulated AWS FinTech environment: risk register, inherent and residual risk, remediation evidence and control mapping." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
-/* ══════════════════════════════════════════════
-   TOKENS
-══════════════════════════════════════════════ */
+/* ══ TOKENS ═════════════════════════════════════ */
 :root {
-  --bg:        #07080a;
-  --bg2:       #0d0e12;
-  --panel:     #12131a;
-  --panel2:    #1a1b26;
-  --line:      #1f2030;
-  --line2:     #2a2b40;
-  --muted:     #4a4d6a;
-  --dim:       #6b6e8e;
-  --text:      #e2e4f0;
-  --bright:    #f0f2ff;
+  --bg:#07080a; --bg2:#0d0e12; --panel:#12131a; --panel2:#1a1b26;
+  --line:#1f2030; --line2:#2a2b40; --muted:#4a4d6a; --dim:#8a8daa; --text:#e2e4f0; --bright:#f0f2ff;
+  --cyan:#00d4ff; --cyan-dim:rgba(0,212,255,.12); --violet:#7c3aed; --violet2:#a855f7;
+  --amber:#f59e0b; --orange:#fb923c; --red:#f43f5e; --green:#10d880;
+  --t-low:#10d880; --t-mod:#f59e0b; --t-high:#fb923c; --t-crit:#f43f5e;
+  --font-head:'Space Grotesk',system-ui,sans-serif; --font-mono:'JetBrains Mono',ui-monospace,monospace;
+  --r:10px; --ease:cubic-bezier(.16,1,.3,1); --gutter:clamp(16px,4vw,48px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{background:var(--bg);color:var(--text);font-family:var(--font-head);line-height:1.6;overflow-x:hidden}
+::selection{background:rgba(0,212,255,.25)}
+a{color:var(--cyan)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+.mono{font-family:var(--font-mono)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
 
-  --cyan:      #00d4ff;
-  --cyan-dim:  rgba(0,212,255,0.12);
-  --cyan-glow: rgba(0,212,255,0.35);
-  --violet:    #7c3aed;
-  --violet2:   #a855f7;
-  --amber:     #f59e0b;
-  --amber-dim: rgba(245,158,11,0.12);
-  --orange:    #fb923c;
-  --red:       #f43f5e;
-  --red-dim:   rgba(244,63,94,0.12);
-  --green:     #10d880;
-  --green-dim: rgba(16,216,128,0.1);
+/* ══ AMBIENT BACKGROUND (slow drifting glow) ═══ */
+.ambient{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.ambient i{position:absolute;width:60vmax;height:60vmax;border-radius:50%;filter:blur(90px);opacity:.16;animation:drift 38s ease-in-out infinite alternate}
+.ambient i:nth-child(1){background:var(--cyan);top:-25vmax;left:-15vmax}
+.ambient i:nth-child(2){background:var(--violet);bottom:-30vmax;right:-20vmax;animation-duration:46s;animation-delay:-12s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(6vmax,4vmax) scale(1.08)}100%{transform:translate(-4vmax,8vmax) scale(.95)}}
 
-  --font-head: 'Space Grotesk', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+/* ══ NAV ═══════════════════════════════════════ */
+nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;padding:12px var(--gutter);
+  background:rgba(7,8,10,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);transition:box-shadow .4s var(--ease)}
+nav.scrolled{box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.logo{font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.logo b{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.navlinks{display:flex;gap:4px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.navlinks a{color:var(--dim);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:999px;white-space:nowrap;transition:color .3s,background .3s}
+.navlinks a:hover,.navlinks a.on{color:var(--bright);background:var(--panel2)}
 
-  --r: 3px;
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* ══ HERO + WAVES ══════════════════════════════ */
+header.hero{position:relative;padding:clamp(56px,10vw,120px) var(--gutter) 150px;overflow:hidden}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan)}
+h1{font-size:clamp(32px,6vw,64px);line-height:1.05;letter-spacing:-.02em;margin:14px 0 18px;max-width:16ch;
+  background:linear-gradient(100deg,var(--bright) 30%,var(--cyan) 60%,var(--violet2) 90%);background-size:200% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 9s ease-in-out infinite alternate}
+@keyframes sheen{to{background-position:100% center}}
+.lede{color:var(--dim);max-width:62ch;font-size:clamp(15px,1.6vw,18px)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:36px;max-width:980px}
+.stat{background:rgba(18,19,26,.7);border:1px solid var(--line2);border-radius:var(--r);padding:16px 18px;backdrop-filter:blur(6px)}
+.stat .n{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--bright)}
+.stat .n s{text-decoration:none;color:var(--red);font-size:18px;margin-right:6px;opacity:.8}
+.stat .l{font-size:12.5px;color:var(--dim)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:500;
+  border:1px solid var(--line2);background:var(--panel);transition:transform .35s var(--ease),border-color .3s,background .3s}
+.btn:hover{transform:translateY(-2px);border-color:var(--cyan)}
+.btn.primary{background:var(--cyan);color:#001018;border-color:var(--cyan)}
+.waves{position:absolute;left:0;right:0;bottom:-1px;height:140px;pointer-events:none}
+.waves svg{position:absolute;bottom:0;left:0;width:200%;height:100%}
+.waves path{animation:wave linear infinite}
+.waves .w1{fill:rgba(0,212,255,.10);animation-duration:22s}
+.waves .w2{fill:rgba(124,58,237,.12);animation-duration:31s;animation-direction:reverse}
+.waves .w3{fill:var(--bg2);animation-duration:40s}
+@keyframes wave{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
-/* ══════════════════════════════════════════════
-   RESET
-══════════════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-head);
-  min-height: 100vh;
-  overflow-x: hidden;
-  line-height: 1.5;
-}
-::selection { background: rgba(0,212,255,0.25); color: var(--cyan); }
-button { cursor: pointer; border: none; background: none; font-family: inherit; }
+/* ══ SECTIONS ══════════════════════════════════ */
+main{background:var(--bg2)}
+section{padding:72px var(--gutter);max-width:1240px;margin:0 auto}
+.divider{height:70px;position:relative;overflow:hidden}
+.divider svg{position:absolute;inset:0;width:200%;height:100%}
+.divider path{fill:none;stroke:var(--line2);stroke-width:1.5;animation:wave 26s linear infinite}
+.divider path+path{stroke:rgba(0,212,255,.25);animation-duration:34s;animation-direction:reverse}
+h2{font-size:clamp(24px,3.2vw,34px);letter-spacing:-.01em;margin-bottom:8px}
+.sub{color:var(--dim);max-width:70ch;margin-bottom:28px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 1s var(--ease),transform 1s var(--ease)}
+.reveal.in{opacity:1;transform:none}
+.callout{border-left:3px solid var(--cyan);padding:12px 16px;background:var(--cyan-dim);border-radius:0 var(--r) var(--r) 0;font-size:14px;color:var(--text)}
+.callout.warn{border-color:var(--amber);background:rgba(245,158,11,.08)}
 
-/* ══════════════════════════════════════════════
-   NOISE OVERLAY
-══════════════════════════════════════════════ */
-body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 0;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px;
-  pointer-events: none;
-}
+/* ══ TIER PILLS ════════════════════════════════ */
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.pill.low{color:var(--t-low);background:rgba(16,216,128,.12)} .pill.mod{color:var(--t-mod);background:rgba(245,158,11,.12)}
+.pill.high{color:var(--t-high);background:rgba(251,146,60,.13)} .pill.crit{color:var(--t-crit);background:rgba(244,63,94,.13)}
+.tag{font-family:var(--font-mono);font-size:11.5px;padding:2px 8px;border-radius:6px;background:var(--panel2);color:var(--dim);border:1px solid var(--line2)}
 
-/* ══════════════════════════════════════════════
-   CANVAS BACKGROUND
-══════════════════════════════════════════════ */
-#bg-canvas {
-  position: fixed; inset: 0; z-index: 0;
-  pointer-events: none; opacity: 0.5;
-}
+/* ══ MATRIX ════════════════════════════════════ */
+.mx-wrap{display:grid;grid-template-columns:auto 1fr;gap:10px;max-width:640px}
+.mx-ylab{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;font-size:12px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+.mx{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:5px;aspect-ratio:1}
+.mx .cell{border-radius:8px;position:relative;opacity:.9}
+.mx .cell span{position:absolute;top:6px;left:8px;font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.55)}
+.cell.low{background:rgba(16,216,128,.16)} .cell.mod{background:rgba(245,158,11,.18)} .cell.high{background:rgba(251,146,60,.22)} .cell.crit{background:rgba(244,63,94,.26)}
+.cell.tol{box-shadow:inset 0 0 0 1px rgba(16,216,128,.35)}
+.mx-x{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;text-align:center;font-size:11px;color:var(--dim);grid-column:2}
+.mx-xt{grid-column:2;text-align:center;font-size:12px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+.dot{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--font-mono);font-size:10px;font-weight:700;color:#05060a;background:var(--bright);
+  box-shadow:0 0 0 3px rgba(7,8,10,.65),0 6px 18px rgba(0,0,0,.45);
+  transition:left 1.1s var(--ease),top 1.1s var(--ease),background .8s,transform .3s var(--ease);cursor:pointer;z-index:2}
+.dot:hover{transform:scale(1.15)}
+@media(max-width:520px){.dot{width:24px;height:24px;margin:-12px 0 0 -12px;font-size:9px}}
+.dot.custom{background:var(--violet2);color:#fff}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line2);border-radius:999px;padding:3px;position:relative}
+.seg button{position:relative;z-index:1;padding:7px 16px;border-radius:999px;font-size:13px;color:var(--dim);transition:color .4s}
+.seg button.on{color:#001018}
+.seg .knob{position:absolute;top:3px;bottom:3px;border-radius:999px;background:var(--cyan);transition:left .6s var(--ease),width .6s var(--ease)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 
-/* ══════════════════════════════════════════════
-   KEYFRAMES
-══════════════════════════════════════════════ */
-@keyframes fadeUp       { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
-@keyframes fadeIn       { from { opacity:0; } to { opacity:1; } }
-@keyframes scanV        { 0% { transform: translateY(-100%); } 100% { transform: translateY(200%); } }
-@keyframes scanH        { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
-@keyframes pulse        { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-@keyframes pulseRing    { 0% { box-shadow: 0 0 0 0 var(--cyan-glow); } 100% { box-shadow: 0 0 0 10px transparent; } }
-@keyframes glitch1      { 0%,100%{clip-path:inset(0)} 10%{clip-path:inset(10% 0 80% 0)} 30%{clip-path:inset(60% 0 20% 0)} 60%{clip-path:inset(30% 0 50% 0)} }
-@keyframes glitch2      { 0%,100%{clip-path:inset(0)} 15%{clip-path:inset(70% 0 10% 0)} 40%{clip-path:inset(20% 0 60% 0)} 70%{clip-path:inset(5% 0 85% 0)} }
-@keyframes shimmer      { 0%{background-position:-200% center} 100%{background-position:200% center} }
-@keyframes borderRace   { 0%{background-position:0% 0%} 100%{background-position:200% 0%} }
-@keyframes matrixRain   { from{opacity:1;transform:translateY(-100%)} to{opacity:0;transform:translateY(600%)} }
-@keyframes radarSpin    { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-@keyframes radarPulse   { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.05)} }
-@keyframes cellFlash    { 0%{transform:scale(1)} 30%{transform:scale(1.1)} 60%{transform:scale(0.97)} 100%{transform:scale(1)} }
-@keyframes scoreCount   { from{letter-spacing:0.4em;opacity:0.4} to{letter-spacing:normal;opacity:1} }
-@keyframes slideRight   { from{transform:translateX(-100%)} to{transform:translateX(0)} }
-@keyframes barGrow      { from{width:0} to{width:var(--target-w)} }
-@keyframes typewrite    { from{width:0} to{width:100%} }
-@keyframes blink        { 0%,100%{opacity:1} 50%{opacity:0} }
-@keyframes floatY       { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-@keyframes rotate360    { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-@keyframes comet        { 0%{opacity:0;transform:translateX(-80px) translateY(80px)} 50%{opacity:1} 100%{opacity:0;transform:translateX(80px) translateY(-80px)} }
-@keyframes dashFlow     { to{stroke-dashoffset:-40} }
-@keyframes heatmap-in   { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+/* ══ REGISTER ══════════════════════════════════ */
+.reg{width:100%;border-collapse:collapse;font-size:14px}
+.reg th{text-align:left;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:500;padding:10px 12px;border-bottom:1px solid var(--line2)}
+.reg td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.reg tr.row{cursor:pointer;transition:background .3s}
+.reg tr.row:hover{background:var(--panel2)}
+.reg .chev{display:inline-block;transition:transform .5s var(--ease);color:var(--dim)}
+.reg tr.row.open .chev{transform:rotate(90deg)}
+.reg td.detail{padding:0;border-bottom:none}
+.collapse{display:grid;grid-template-rows:0fr;transition:grid-template-rows .7s var(--ease)}
+.collapse>div{overflow:hidden}
+tr.open+tr .collapse{grid-template-rows:1fr}
+.det{padding:6px 12px 26px;display:grid;gap:18px}
+.det h4{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px}
+.det p,.det li{font-size:14px;color:var(--text)}
+.det ul{padding-left:18px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}
+.code2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px}
+pre{font-family:var(--font-mono);font-size:12px;line-height:1.55;background:#05060a;border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;max-height:380px;white-space:pre}
+.ph{font-family:var(--font-mono);font-size:11px;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+.ph.b{color:var(--red)} .ph.a{color:var(--green)}
+.ctl{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
+.ctl .tag{flex-shrink:0}
+.rm{color:var(--dim);font-size:12px;text-decoration:underline}
+.table-scroll{overflow-x:auto}
 
-/* ══════════════════════════════════════════════
-   PRELOADER
-══════════════════════════════════════════════ */
-#preloader {
-  position: fixed; inset:0; z-index:9999;
-  background: var(--bg);
-  display: flex; flex-direction:column; align-items:center; justify-content:center; gap:24px;
-  transition: opacity 0.6s var(--ease);
-}
-#preloader.hidden { opacity:0; pointer-events:none; }
-.pre-logo {
-  font-family: var(--font-mono); font-size:13px; letter-spacing:0.35em;
-  color: var(--cyan); text-transform:uppercase;
-}
-.pre-bar { width:240px; height:1px; background:var(--line2); position:relative; overflow:hidden; }
-.pre-bar::after { content:''; position:absolute; left:0; top:0; height:100%; background:var(--cyan); animation: slideRight 1.8s var(--ease) forwards; }
-.pre-status { font-family:var(--font-mono); font-size:10px; color:var(--muted); letter-spacing:0.2em; }
+/* ══ CONTROLS ══════════════════════════════════ */
+.fn{margin-bottom:22px}
+.fn h3{font-size:15px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
+.sc{display:grid;grid-template-columns:110px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.sc .fs{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:620px){.sc{grid-template-columns:1fr}.sc .fs{justify-content:flex-start}}
 
-/* ══════════════════════════════════════════════
-   HEADER
-══════════════════════════════════════════════ */
-header {
-  position:sticky; top:0; z-index:100;
-  background: rgba(7,8,10,0.88);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-bottom:1px solid var(--line);
-  animation: fadeIn 0.4s var(--ease);
-}
-.header-inner {
-  max-width:1440px; margin:0 auto;
-  padding:0 32px; height:56px;
-  display:flex; align-items:center; justify-content:space-between;
-}
-.hdr-brand { display:flex; align-items:center; gap:14px; }
-.hdr-logo-ring {
-  width:30px; height:30px; border-radius:50%;
-  border:1.5px solid var(--cyan);
-  display:flex; align-items:center; justify-content:center;
-  position:relative; animation: radarPulse 3s ease-in-out infinite;
-}
-.hdr-logo-ring::after {
-  content:'';position:absolute; inset:0; border-radius:50%;
-  border:1px solid rgba(0,212,255,0.25);
-  animation: rotate360 8s linear infinite;
-  border-top-color: var(--cyan);
-}
-.hdr-logo-dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); animation: pulse 2s infinite; }
-.hdr-brand-name { font-size:11px; font-weight:700; letter-spacing:0.3em; color:var(--bright); text-transform:uppercase; }
-.hdr-brand-name span { color:var(--cyan); }
-.hdr-nav { display:flex; align-items:center; gap:8px; }
-.hdr-chip {
-  padding:4px 10px; border:1px solid var(--line2); border-radius:var(--r);
-  font-family:var(--font-mono); font-size:9px; color:var(--muted);
-  text-transform:uppercase; letter-spacing:0.12em;
-  transition: all 0.2s;
-}
-.hdr-chip:hover { border-color:var(--cyan); color:var(--cyan); }
-.hdr-chip.active { border-color:rgba(0,212,255,0.5); color:var(--cyan); background:var(--cyan-dim); }
-.hdr-sep { width:1px; height:20px; background:var(--line2); margin:0 4px; }
-.hdr-clock {
-  font-family:var(--font-mono); font-size:11px; color:var(--cyan);
-  padding:4px 10px; border:1px solid rgba(0,212,255,0.25); border-radius:var(--r);
-  background:var(--cyan-dim);
-}
-@media(max-width:768px){.hdr-nav{display:none;}}
+/* ══ EVIDENCE ══════════════════════════════════ */
+.term{background:#05060a;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden}
+.term .bar{display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);font-family:var(--font-mono);font-size:12px;color:var(--dim)}
+.term .bar i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
+.term pre{border:none;border-radius:0;max-height:340px}
+.cmp{display:grid;gap:14px}
+.cmp .row2{display:grid;grid-template-columns:90px 1fr 54px;gap:10px;align-items:center;font-size:13px}
+.track{height:10px;border-radius:999px;background:var(--panel2);overflow:hidden;display:flex}
+.track i{display:block;height:100%;width:0;transition:width 1.6s var(--ease)}
+.track .p{background:var(--green)} .track .f{background:var(--red)} .track .k{background:var(--amber)}
 
-/* ══════════════════════════════════════════════
-   MAIN LAYOUT
-══════════════════════════════════════════════ */
-main { position:relative; z-index:1; max-width:1440px; margin:0 auto; padding:40px 32px 100px; }
-@media(max-width:768px){ main{padding:24px 16px 80px;} }
+/* ══ FORM ══════════════════════════════════════ */
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:14px}
+.form label{display:grid;gap:6px;font-size:12.5px;color:var(--dim)}
+.form input,.form select{background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;transition:border-color .3s}
+.form input:focus,.form select:focus{border-color:var(--cyan);outline:none}
+.preview{display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+.preview .big{font-family:var(--font-mono);font-size:40px;font-weight:700;min-width:2ch;transition:color .5s}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,120px);opacity:0;visibility:hidden;transition:transform .6s var(--ease),opacity .4s,visibility .6s;background:var(--panel2);border:1px solid var(--line2);padding:10px 18px;border-radius:999px;font-size:14px;z-index:30}
+.toast.show{transform:translate(-50%,0);opacity:1;visibility:visible}
 
-/* ══════════════════════════════════════════════
-   HERO INTRO
-══════════════════════════════════════════════ */
-.hero {
-  display:grid; grid-template-columns:1fr auto; align-items:start; gap:40px;
-  margin-bottom:56px;
-  animation: fadeUp 0.6s var(--ease);
-}
-@media(max-width:900px){ .hero{grid-template-columns:1fr;} }
-.hero-eyebrow {
-  font-family:var(--font-mono); font-size:10px; color:var(--cyan);
-  letter-spacing:0.3em; text-transform:uppercase; margin-bottom:12px;
-  display:flex; align-items:center; gap:10px;
-}
-.hero-eyebrow::before { content:''; display:block; width:32px; height:1px; background:var(--cyan); }
-.hero-title {
-  font-size:clamp(28px,4vw,52px); font-weight:700; line-height:1.1;
-  letter-spacing:-0.03em; color:var(--bright); position:relative;
-}
-.hero-title .glitch { position:relative; display:inline-block; }
-.hero-title .glitch::before,
-.hero-title .glitch::after {
-  content: attr(data-text);
-  position:absolute; inset:0; color:var(--cyan); opacity:0;
-}
-.hero-title .glitch::before { text-shadow:-2px 0 var(--red); animation:glitch1 5s infinite; }
-.hero-title .glitch::after  { text-shadow: 2px 0 var(--violet2); animation:glitch2 5s 0.3s infinite; }
-.hero-title .accent { color:var(--cyan); }
-.hero-sub { font-size:14px; color:var(--dim); margin-top:16px; max-width:54ch; line-height:1.65; }
-.hero-badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:20px; }
-.badge {
-  display:flex; align-items:center; gap:6px;
-  padding:5px 12px; border:1px solid var(--line2); border-radius:20px;
-  font-family:var(--font-mono); font-size:9px; color:var(--muted);
-  letter-spacing:0.1em; text-transform:uppercase;
-}
-.badge .dot { width:4px; height:4px; border-radius:50%; }
-.badge .dot.green { background:var(--green); animation:pulse 2s infinite; }
-.badge .dot.cyan  { background:var(--cyan); animation:pulse 2s 0.5s infinite; }
-.badge .dot.amber { background:var(--amber); animation:pulse 2s 1s infinite; }
+footer{padding:40px var(--gutter);color:var(--dim);font-size:13px;border-top:1px solid var(--line);background:var(--bg)}
+.src li{margin:8px 0}
+.src{padding-left:18px}
 
-.hero-radar {
-  width:160px; height:160px; position:relative;
-  flex-shrink:0;
-  animation: floatY 4s ease-in-out infinite;
-}
-.radar-svg { width:100%; height:100%; }
-
-/* ══════════════════════════════════════════════
-   GRID LAYOUT
-══════════════════════════════════════════════ */
-.grid-body {
-  display:grid; gap:24px;
-  grid-template-columns: 380px 1fr;
-  grid-template-rows: auto;
-  grid-template-areas:
-    "inputs matrix"
-    "inputs telemetry"
-    "threat-meta threat-meta";
-}
-@media(max-width:1100px){
-  .grid-body {
-    grid-template-columns:1fr;
-    grid-template-areas: "inputs" "matrix" "telemetry" "threat-meta";
-  }
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+  .reveal{opacity:1;transform:none}
+  html{scroll-behavior:auto}
 }
 
-/* ══════════════════════════════════════════════
-   PANEL BASE
-══════════════════════════════════════════════ */
-.panel-base {
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:var(--r);
-  position:relative; overflow:hidden;
-}
-.panel-base::before {
-  content:''; position:absolute; top:0; left:0; right:0; height:1px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity:0.4;
-}
-.panel-scanline {
-  position:absolute; left:0; right:0; height:40%;
-  background: linear-gradient(to bottom, transparent, rgba(0,212,255,0.025), transparent);
-  animation: scanV 6s linear infinite;
-  pointer-events:none;
-}
-
-/* ══════════════════════════════════════════════
-   SECTION LABELS
-══════════════════════════════════════════════ */
-.sec-eyebrow {
-  font-family:var(--font-mono); font-size:9px; color:var(--cyan);
-  letter-spacing:0.25em; text-transform:uppercase;
-  display:flex; align-items:center; gap:8px; margin-bottom:6px;
-}
-.sec-eyebrow::before { content:'['; color:var(--muted); }
-.sec-eyebrow::after  { content:']'; color:var(--muted); }
-.sec-title { font-size:18px; font-weight:600; letter-spacing:-0.02em; color:var(--bright); margin-bottom:6px; }
-.sec-desc  { font-size:12px; color:var(--dim); line-height:1.6; }
-
-/* ══════════════════════════════════════════════
-   INPUTS PANEL
-══════════════════════════════════════════════ */
-.inputs-panel {
-  grid-area: inputs;
-  padding:24px;
-}
-.input-block { margin-bottom:28px; }
-.input-block:last-child { margin-bottom:0; }
-
-/* Likelihood */
-.like-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:14px; }
-.like-btn {
-  position:relative; overflow:hidden;
-  height:64px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
-  background:var(--bg2);
-  border:1px solid var(--line2); border-radius:var(--r);
-  color:var(--dim); transition: all 0.2s var(--ease);
-  font-family:var(--font-head);
-}
-.like-btn::before {
-  content:''; position:absolute; inset:0;
-  background: linear-gradient(135deg, transparent 40%, rgba(0,212,255,0.06));
-  opacity:0; transition:opacity 0.2s;
-}
-.like-btn:hover { border-color:rgba(0,212,255,0.4); color:var(--text); transform:translateY(-1px); }
-.like-btn:hover::before { opacity:1; }
-.like-btn.active {
-  background: var(--cyan-dim);
-  border-color: var(--cyan);
-  color: var(--cyan);
-  box-shadow: 0 0 0 1px rgba(0,212,255,0.2), 0 0 20px rgba(0,212,255,0.15), inset 0 0 16px rgba(0,212,255,0.04);
-}
-.like-btn .lcode { font-family:var(--font-mono); font-size:9px; color:var(--muted); }
-.like-btn.active .lcode { color:rgba(0,212,255,0.6); }
-.like-btn .llbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
-.like-btn .lbar {
-  position:absolute; bottom:0; left:0; width:0; height:2px;
-  background:var(--cyan); transition:width 0.3s var(--ease); border-radius:0;
-}
-.like-btn.active .lbar { width:100%; }
-.like-btn .lripple {
-  position:absolute; inset:0;
-  background: radial-gradient(circle at center, rgba(0,212,255,0.2) 0%, transparent 70%);
-  opacity:0; transform:scale(0); transition:all 0.5s;
-}
-.like-btn.active .lripple { opacity:1; transform:scale(1); }
-
-.like-desc {
-  margin-top:12px; padding:10px 14px;
-  border-left:2px solid var(--cyan);
-  background: var(--cyan-dim); border-radius:0 var(--r) var(--r) 0;
-  font-family:var(--font-mono); font-size:10px; color:var(--dim); line-height:1.6;
-  animation: fadeUp 0.2s var(--ease);
-}
-.like-desc.hidden { display:none; }
-
-/* Impact */
-.impact-list { display:flex; flex-direction:column; gap:6px; margin-top:14px; }
-.impact-btn {
-  position:relative; overflow:hidden;
-  padding:11px 14px;
-  display:flex; align-items:center; justify-content:space-between;
-  background:var(--bg2);
-  border:1px solid var(--line2); border-radius:var(--r);
-  color:var(--dim); transition: all 0.2s var(--ease);
-  font-family:var(--font-head);
-}
-.impact-btn::after {
-  content:''; position:absolute; left:0; top:0; width:0; height:100%;
-  background: linear-gradient(90deg, var(--cyan-dim), transparent);
-  transition: width 0.4s var(--ease);
-}
-.impact-btn:hover { border-color:rgba(0,212,255,0.3); color:var(--text); }
-.impact-btn.active { border-color:var(--cyan); color:var(--cyan); background:var(--cyan-dim); }
-.impact-btn.active::after { width:100%; }
-.impact-btn .ileft { display:flex; align-items:center; gap:10px; position:relative; z-index:1; }
-.impact-btn .inum {
-  font-family:var(--font-mono); font-size:10px; color:var(--muted);
-  width:20px; text-align:right;
-}
-.impact-btn.active .inum { color:rgba(0,212,255,0.6); }
-.impact-btn .ilbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
-.impact-radio {
-  width:14px; height:14px; border-radius:50%;
-  border:1.5px solid var(--line2); display:flex; align-items:center; justify-content:center;
-  flex-shrink:0; transition:all 0.2s; position:relative; z-index:1;
-}
-.impact-btn.active .impact-radio { border-color:var(--cyan); }
-.impact-radio-dot {
-  width:5px; height:5px; border-radius:50%; background:var(--cyan);
-  transform:scale(0); transition:transform 0.2s var(--ease);
-}
-.impact-btn.active .impact-radio-dot { transform:scale(1); }
-
-/* Impact severity dots */
-.impact-sev { display:flex; gap:3px; }
-.sev-dot { width:5px; height:5px; border-radius:50%; background:var(--line2); }
-.impact-btn[data-v="1"] .sev-dot:nth-child(1) { background:var(--green); }
-.impact-btn[data-v="2"] .sev-dot:nth-child(-n+2) { background:var(--amber); }
-.impact-btn[data-v="3"] .sev-dot:nth-child(-n+3) { background:var(--orange); }
-.impact-btn[data-v="4"] .sev-dot:nth-child(-n+4) { background:var(--red); }
-.impact-btn[data-v="5"] .sev-dot { background:var(--red); box-shadow:0 0 4px var(--red); animation:pulse 1s infinite; }
-
-/* Actions */
-.actions { display:flex; gap:8px; margin-top:24px; }
-.exec-btn {
-  flex:1; position:relative; overflow:hidden;
-  padding:14px 20px;
-  background:var(--cyan); color:var(--bg);
-  font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase;
-  border-radius:var(--r);
-  transition: all 0.3s var(--ease);
-}
-.exec-btn::before {
-  content:''; position:absolute; inset:-1px;
-  background: linear-gradient(90deg, var(--cyan), #00f0ff, var(--cyan));
-  background-size:200%;
-  opacity:0; transition:opacity 0.3s;
-  border-radius:inherit;
-  animation: shimmer 1.5s linear infinite;
-}
-.exec-btn:not(:disabled):hover { transform:translateY(-1px); box-shadow:0 8px 32px rgba(0,212,255,0.3); }
-.exec-btn:not(:disabled):hover::before { opacity:1; }
-.exec-btn:disabled { opacity:0.35; cursor:not-allowed; }
-.exec-btn span { position:relative; z-index:1; }
-
-.reset-btn {
-  padding:0 14px;
-  border:1px solid var(--line2); border-radius:var(--r);
-  font-family:var(--font-mono); font-size:9px; color:var(--dim);
-  text-transform:uppercase; letter-spacing:0.12em;
-  transition:all 0.2s;
-}
-.reset-btn:hover { border-color:var(--red); color:var(--red); }
-.reset-btn.hidden { display:none; }
-
-/* ══════════════════════════════════════════════
-   MATRIX PANEL
-══════════════════════════════════════════════ */
-.matrix-panel {
-  grid-area:matrix;
-  padding:28px;
-}
-
-.matrix-hdr {
-  display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;
-}
-.matrix-hdr-left { display:flex; align-items:center; gap:12px; }
-.matrix-hdr-title {
-  font-family:var(--font-mono); font-size:10px;
-  color:var(--cyan); letter-spacing:0.25em; text-transform:uppercase;
-}
-.matrix-hdr-sub {
-  font-family:var(--font-mono); font-size:9px;
-  color:var(--muted); letter-spacing:0.1em;
-}
-.matrix-modes { display:flex; gap:4px; }
-.mode-btn {
-  padding:3px 8px; border:1px solid var(--line2); border-radius:var(--r);
-  font-family:var(--font-mono); font-size:8px; color:var(--muted);
-  letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s;
-}
-.mode-btn.active { border-color:rgba(0,212,255,0.4); color:var(--cyan); background:var(--cyan-dim); }
-
-.matrix-wrap { position:relative; }
-.matrix-y-label {
-  position:absolute; left:-20px; top:50%;
-  transform:translate(-50%, -50%) rotate(-90deg);
-  font-family:var(--font-mono); font-size:8px; color:var(--muted);
-  text-transform:uppercase; letter-spacing:0.25em; white-space:nowrap;
-}
-.matrix-grid-wrap { padding-left:16px; }
-.matrix-grid {
-  display:grid; grid-template-columns:repeat(5,1fr); gap:4px;
-  padding:0; position:relative;
-}
-.cell {
-  aspect-ratio:1;
-  position:relative; border-radius:2px;
-  display:flex; align-items:center; justify-content:center;
-  cursor:default; overflow:hidden;
-  transition: all 0.25s var(--ease);
-  border:1px solid transparent;
-}
-.cell-val { font-family:var(--font-mono); font-size:10px; font-weight:500; transition:all 0.2s; }
-.cell-coord {
-  position:absolute; top:3px; left:4px;
-  font-family:var(--font-mono); font-size:7px; color:rgba(255,255,255,0.15);
-  line-height:1;
-}
-.cell-glyph {
-  position:absolute; bottom:3px; right:4px; font-size:7px; opacity:0.4;
-}
-
-/* tone classes */
-.t-low  { --cell-bg:rgba(16,216,128,0.08);  --cell-border:rgba(16,216,128,0.2);  --cell-text: #10d880; }
-.t-mod  { --cell-bg:rgba(245,158,11,0.10);  --cell-border:rgba(245,158,11,0.25); --cell-text: #f59e0b; }
-.t-high { --cell-bg:rgba(251,146,60,0.12);  --cell-border:rgba(251,146,60,0.28); --cell-text: #fb923c; }
-.t-vhigh{ --cell-bg:rgba(244,63,94,0.12);   --cell-border:rgba(244,63,94,0.28);  --cell-text: #f43f5e; }
-.t-crit { --cell-bg:rgba(244,63,94,0.22);   --cell-border:rgba(244,63,94,0.45);  --cell-text: #ff3060; }
-.cell { background:var(--cell-bg); border-color:var(--cell-border); }
-.cell .cell-val { color:var(--cell-text); opacity:0.6; }
-
-.cell.dimmed { opacity:0.28; }
-.cell.highlighted {
-  opacity:1;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
-}
-.cell.selected {
-  border-color:var(--cyan) !important;
-  box-shadow: 0 0 0 1px var(--cyan), 0 0 20px rgba(0,212,255,0.3), inset 0 0 12px rgba(0,212,255,0.08) !important;
-  animation: cellFlash 0.5s var(--ease);
-  z-index:2;
-}
-.cell.selected .cell-val { opacity:1 !important; color:var(--bright) !important; }
-
-/* corner reticles */
-.reticle-tl,.reticle-tr,.reticle-bl,.reticle-br {
-  position:absolute; width:7px; height:7px; border-color:var(--cyan); border-style:solid; opacity:0; transition:opacity 0.2s;
-}
-.cell.selected .reticle-tl,.cell.selected .reticle-tr,.cell.selected .reticle-bl,.cell.selected .reticle-br { opacity:1; }
-.reticle-tl { top:2px; left:2px;  border-width:1px 0 0 1px; }
-.reticle-tr { top:2px; right:2px; border-width:1px 1px 0 0; }
-.reticle-bl { bottom:2px; left:2px;  border-width:0 0 1px 1px; }
-.reticle-br { bottom:2px; right:2px; border-width:0 1px 1px 0; }
-
-/* matrix crosshair overlays */
-.matrix-crosshair-h,.matrix-crosshair-v {
-  position:absolute; background:rgba(0,212,255,0.06);
-  pointer-events:none; opacity:0; transition:opacity 0.3s; border-radius:2px;
-}
-.matrix-crosshair-h { left:0; right:0; height:calc((100% - 16px)/5); }
-.matrix-crosshair-v { top:0; bottom:0; width:calc((100% - 16px)/5); }
-
-.matrix-x-labels {
-  display:grid; grid-template-columns:repeat(5,1fr); gap:4px;
-  margin-top:6px;
-}
-.matrix-x-lbl {
-  text-align:center; font-family:var(--font-mono); font-size:8px;
-  color:var(--muted); text-transform:uppercase; letter-spacing:0.1em;
-  padding:3px 0; transition:color 0.2s;
-}
-.matrix-x-lbl.active { color:var(--cyan); }
-.matrix-x-axis-label {
-  text-align:right; font-family:var(--font-mono); font-size:8px;
-  color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; margin-top:4px;
-}
-.matrix-y-labels {
-  display:grid; grid-template-rows:repeat(5,1fr); gap:4px;
-  padding-right:8px;
-}
-.matrix-y-lbl {
-  display:flex; align-items:center; justify-content:flex-end;
-  font-family:var(--font-mono); font-size:8px;
-  color:var(--muted); text-transform:uppercase; letter-spacing:0.1em;
-  transition:color 0.2s;
-}
-.matrix-y-lbl.active { color:var(--cyan); }
-.matrix-body { display:flex; }
-
-/* ══════════════════════════════════════════════
-   TELEMETRY PANEL
-══════════════════════════════════════════════ */
-.telem-panel {
-  grid-area:telemetry;
-  padding:24px;
-}
-
-.telem-top {
-  display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;
-}
-
-.score-block {}
-.score-lbl { font-family:var(--font-mono); font-size:9px; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:8px; }
-.score-val {
-  font-family:var(--font-mono); font-size:56px; font-weight:700;
-  color:var(--muted); line-height:1;
-  transition: color 0.4s;
-}
-.score-val.c-low   { color:var(--green); text-shadow:0 0 30px rgba(16,216,128,0.4); }
-.score-val.c-mod   { color:var(--amber); text-shadow:0 0 30px rgba(245,158,11,0.4); }
-.score-val.c-high  { color:var(--orange); text-shadow:0 0 30px rgba(251,146,60,0.4); }
-.score-val.c-crit  { color:var(--red); text-shadow:0 0 30px rgba(244,63,94,0.4); }
-.tier-pill {
-  display:inline-block; margin-top:8px;
-  padding:3px 10px; font-family:var(--font-mono);
-  font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:0.15em;
-  border-radius:2px; animation: fadeIn 0.3s;
-}
-.tier-pill.hidden { display:none; }
-.tier-pill.p-low   { background:var(--green);  color:var(--bg); }
-.tier-pill.p-mod   { background:var(--amber);  color:var(--bg); }
-.tier-pill.p-high  { background:var(--orange); color:var(--bg); }
-.tier-pill.p-crit  { background:var(--red);    color:var(--bright); }
-
-.formula-block {}
-.formula-lbl { font-family:var(--font-mono); font-size:9px; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:8px; }
-.formula-eq {
-  font-family:var(--font-mono); font-size:13px; color:var(--text); line-height:1.8;
-}
-.formula-eq .hl { color:var(--cyan); }
-.formula-eq .eq-result { font-size:20px; font-weight:700; color:var(--bright); }
-
-/* sparkline */
-.sparkline-wrap { margin-top:12px; }
-.sparkline-lbl { font-family:var(--font-mono); font-size:9px; color:var(--muted); letter-spacing:0.15em; text-transform:uppercase; margin-bottom:6px; }
-.sparkline-svg { width:100%; height:40px; }
-
-/* Log */
-.log-wrap {
-  background:rgba(0,0,0,0.5); border:1px solid var(--line); border-radius:var(--r);
-  padding:14px; height:168px; overflow:hidden; position:relative;
-  font-family:var(--font-mono); font-size:10px; line-height:1.6;
-}
-.log-header {
-  display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
-  border-bottom:1px solid var(--line); padding-bottom:8px;
-}
-.log-title { font-size:9px; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; }
-.log-indicators { display:flex; gap:4px; }
-.log-ind { width:5px; height:5px; border-radius:1px; background:var(--line2); }
-.log-ind.on   { background:var(--cyan); animation:pulse 1.2s infinite; }
-.log-ind.done { background:var(--green); animation:none; }
-.log-body { overflow:hidden; }
-.log-empty { color:var(--muted); font-style:italic; font-size:10px; }
-.log-line { animation:fadeUp 0.2s var(--ease); }
-.log-ts  { color:var(--muted); }
-.log-tag { }
-.tone-sys   { color:#525575; }
-.tone-data  { color:#8890b8; }
-.tone-intel { color:var(--cyan); }
-.tone-eval  { color:var(--text); }
-.tone-ok    { color:var(--green); }
-.tone-alert { color:var(--red); animation:pulse 1s infinite; }
-.log-wrap::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:48px;
-  background:linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-  pointer-events:none;
-}
-
-/* ══════════════════════════════════════════════
-   THREAT META PANELS
-══════════════════════════════════════════════ */
-.threat-meta {
-  grid-area:threat-meta;
-  display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
-  animation:fadeUp 0.5s var(--ease);
-}
-.threat-meta.hidden { display:none; }
-@media(max-width:900px){ .threat-meta { grid-template-columns:1fr; } }
-
-.tm-panel { padding:20px; }
-.tm-label { font-family:var(--font-mono); font-size:9px; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:14px; display:block; }
-
-/* Risk bar */
-.risk-bar-wrap { margin-bottom:12px; }
-.risk-bar-track { height:6px; background:var(--line2); border-radius:3px; overflow:hidden; }
-.risk-bar-fill  { height:100%; width:0; border-radius:3px; transition:width 1s var(--ease); }
-.risk-bar-fill.c-low   { background:linear-gradient(90deg,var(--green),#6ee7b7); }
-.risk-bar-fill.c-mod   { background:linear-gradient(90deg,var(--amber),#fde68a); }
-.risk-bar-fill.c-high  { background:linear-gradient(90deg,var(--orange),#fdba74); }
-.risk-bar-fill.c-crit  { background:linear-gradient(90deg,var(--red),#fb7185); box-shadow:0 0 12px rgba(244,63,94,0.5); }
-.risk-bar-labels { display:flex; justify-content:space-between; margin-top:4px; font-family:var(--font-mono); font-size:8px; color:var(--muted); }
-.tm-body { font-size:11px; color:var(--dim); line-height:1.65; }
-.tm-body strong { color:var(--text); font-weight:600; }
-
-/* Protocol */
-.proto-badge {
-  display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
-  border:1px solid var(--line2); border-radius:var(--r);
-  font-family:var(--font-mono); font-size:10px; font-weight:600;
-  letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px;
-}
-.proto-badge.c-low   { border-color:rgba(16,216,128,0.4);  color:var(--green); background:var(--green-dim); }
-.proto-badge.c-mod   { border-color:rgba(245,158,11,0.4);  color:var(--amber); background:var(--amber-dim); }
-.proto-badge.c-high  { border-color:rgba(251,146,60,0.4);  color:var(--orange); background:rgba(251,146,60,0.08); }
-.proto-badge.c-crit  { border-color:rgba(244,63,94,0.5);   color:var(--red); background:var(--red-dim); }
-
-/* Audit */
-.audit-file {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px; background:var(--bg2); border:1px solid var(--line2); border-radius:var(--r);
-  margin-bottom:12px;
-}
-.audit-file-icon {
-  width:28px; height:32px; border:1px solid var(--line2); border-radius:2px;
-  display:flex; align-items:center; justify-content:center;
-  font-family:var(--font-mono); font-size:7px; color:var(--cyan); flex-shrink:0;
-  position:relative;
-}
-.audit-file-icon::after {
-  content:''; position:absolute; top:0; right:0;
-  border:4px solid transparent; border-top-color:var(--line2); border-right-color:var(--line2);
-}
-.audit-file-name { font-family:var(--font-mono); font-size:10px; color:var(--text); }
-.audit-file-size { font-family:var(--font-mono); font-size:8px; color:var(--muted); margin-top:2px; }
-
-/* ══════════════════════════════════════════════
-   MATRIX RAIN (decoration)
-══════════════════════════════════════════════ */
-.matrix-rain {
-  position:absolute; top:0; right:0; width:60px; height:100%;
-  overflow:hidden; pointer-events:none; opacity:0.04;
-}
-.rain-col {
-  position:absolute; top:0; width:12px;
-  font-family:var(--font-mono); font-size:9px; color:var(--cyan);
-  writing-mode:vertical-rl; text-orientation:upright;
-  animation: matrixRain linear infinite;
-  user-select:none;
-}
-
-/* ══════════════════════════════════════════════
-   FOOTER
-══════════════════════════════════════════════ */
-footer {
-  position:fixed; bottom:0; left:0; right:0; z-index:100;
-  background:rgba(7,8,10,0.92); backdrop-filter:blur(16px);
-  border-top:1px solid var(--line);
-  padding:0 32px; height:40px;
-  display:flex; align-items:center; justify-content:space-between;
-}
-.ft-left  { display:flex; gap:20px; align-items:center; }
-.ft-right { font-family:var(--font-mono); font-size:8px; color:var(--muted); letter-spacing:0.1em; }
-.ft-status { display:flex; align-items:center; gap:7px; }
-.ft-dot { width:5px; height:5px; border-radius:50%; }
-.ft-dot.green  { background:var(--green); animation:pulse 2s infinite; }
-.ft-dot.cyan   { background:var(--cyan); animation:pulse 2s 0.5s infinite; }
-.ft-dot.amber  { background:var(--amber); animation:pulse 2s 1s infinite; }
-.ft-dot.gray   { background:var(--muted); animation:none; }
-.ft-lbl { font-family:var(--font-mono); font-size:8px; color:var(--muted); letter-spacing:0.15em; text-transform:uppercase; }
-
-/* ══════════════════════════════════════════════
-   MISC UTILITIES
-══════════════════════════════════════════════ */
-.hidden { display:none !important; }
-.mono   { font-family:var(--font-mono); }
-
-/* Reduced motion */
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+/* ══ PRINT / PDF ═══════════════════════════════ */
+@media print{
+  :root{--bg:#fff;--bg2:#fff;--panel:#fff;--panel2:#f3f4f8;--line:#ddd;--line2:#ccc;--dim:#555;--text:#111;--bright:#000}
+  nav,.waves,.divider,.ambient,.actions,#add,.seg,.toast,.rm{display:none!important}
+  header.hero{padding:0 0 16px}
+  h1{color:#000;background:none;-webkit-text-fill-color:#000}
+  .reveal{opacity:1;transform:none}
+  .collapse{grid-template-rows:1fr!important}
+  pre{max-height:none;white-space:pre-wrap;background:#f7f7f9}
+  .term pre{background:#f7f7f9;color:#111}
+  section{padding:18px 0;break-inside:auto}
+  tr.row,.stat,.ctl,.sc{break-inside:avoid}
+  tr.row{break-after:avoid}
+  .table-scroll{overflow:visible}
+  .reg{font-size:11.5px}
+  .reg td,.reg th{padding:8px 6px}
+  .reg td.mono{white-space:nowrap}
+  .det{padding:4px 6px 18px}
+  pre{font-size:10px}
+  .stat{background:#fff;backdrop-filter:none}
+  .mx .cell span{color:#555}
+  .dot,.dot.custom{box-shadow:none;border:1.5px solid #000;background:#fff;color:#000;width:22px;height:22px;margin:-11px 0 0 -11px;font-size:8px}
+  .eyebrow,.det h4{color:#006b85}
+  .mx-wrap{max-width:380px;break-inside:avoid}
+  h2,h3,.sub{break-after:avoid}
 }
 </style>
 </head>
 <body>
+<div class="ambient" aria-hidden="true"><i></i><i></i></div>
 
-<!-- ══ PRELOADER ══════════════════════════════ -->
-<div id="preloader">
-  <div class="pre-logo">NIST_RISK_ASSESSMENT // NIST SP 800-30</div>
-  <div class="pre-bar"></div>
-  <div class="pre-status" id="preStatus">INITIALIZING RISK ASSESSMENT…</div>
-</div>
+<nav id="nav" aria-label="Report sections">
+  <div class="logo"><b></b>NIST Risk Assessment</div>
+  <div class="navlinks">
+    <a href="#summary">Summary</a><a href="#matrix">Matrix</a><a href="#register">Register</a>
+    <a href="#controls">Controls</a><a href="#evidence">Evidence</a><a href="#add">Add risk</a><a href="#sources">Sources</a>
+  </div>
+</nav>
 
-<!-- ══ BG CANVAS ══════════════════════════════ -->
-<canvas id="bg-canvas"></canvas>
-
-<!-- ══ HEADER ════════════════════════════════ -->
-<header>
-  <div class="header-inner">
-    <div class="hdr-brand">
-      <div class="hdr-logo-ring"><div class="hdr-logo-dot"></div></div>
-      <span class="hdr-brand-name"><span>NIST</span> · RISK ASSESSMENT</span>
-    </div>
-    <div class="hdr-nav">
-      <div class="hdr-chip active">NIST_SP_800-30</div>
-      <div class="hdr-chip">GRC_5×5</div>
-      <div class="hdr-chip">ISO_27005</div>
-      <div class="hdr-sep"></div>
-      <div class="hdr-chip">Session_88A</div>
-      <div class="hdr-sep"></div>
-      <div class="hdr-clock mono" id="hdr-clock">00:00:00</div>
-    </div>
+<header class="hero">
+  <div class="eyebrow">NIST CSF 2.0 · Risk assessment report</div>
+  <h1>Simulated AWS FinTech platform</h1>
+  <p class="lede">A risk assessment of a deliberately misconfigured AWS environment, the Terraform that fixes it, and the scan evidence that proves it. Every finding below links to the code change, the NIST controls it supports, and the tool output it is based on.</p>
+  <div class="stats" id="stats"></div>
+  <div class="actions">
+    <button class="btn primary" id="exportPdf">Download PDF report</button>
+    <button class="btn" id="exportCsv">Export register (CSV)</button>
+    <button class="btn" id="exportJson">Export full data (JSON)</button>
+  </div>
+  <div class="waves" aria-hidden="true">
+    <svg viewBox="0 0 2880 140" preserveAspectRatio="none"><path class="w1" d="M0 70 Q360 30 720 70 T1440 70 T2160 70 T2880 70 V140 H0Z"/></svg>
+    <svg viewBox="0 0 2880 140" preserveAspectRatio="none"><path class="w2" d="M0 90 Q360 120 720 90 T1440 90 T2160 90 T2880 90 V140 H0Z"/></svg>
+    <svg viewBox="0 0 2880 140" preserveAspectRatio="none"><path class="w3" d="M0 110 Q360 90 720 110 T1440 110 T2160 110 T2880 110 V140 H0Z"/></svg>
   </div>
 </header>
 
-<!-- ══ MAIN ══════════════════════════════════ -->
 <main>
-
-  <!-- HERO -->
-  <div class="hero">
-    <div>
-      <div class="hero-eyebrow">Risk Quantification Framework</div>
-      <h1 class="hero-title">
-        <span class="glitch" data-text="Threat">Nist</span>
-        <span class="accent"> Risk</span><br>Assessment Dashboard
-      </h1>
-      <p class="hero-sub">NIST SP 800-30 Rev.1 compliant probabilistic risk assessment. Map likelihood against impact severity across a 5×5 coordinate matrix — support consistent risk assessment decisions, not noise.</p>
-      <div class="hero-badges">
-        <div class="badge"><div class="dot green"></div>Assessment Ready</div>
-        <div class="badge"><div class="dot cyan"></div>Session Active</div>
-        <div class="badge"><div class="dot amber"></div>Enc_AES-256-GCM</div>
-        <div class="badge"><div class="dot cyan"></div>NIST_Compliant</div>
-      </div>
+<section id="summary" class="reveal">
+  <h2>Executive summary</h2>
+  <div class="grid2">
+    <div class="card">
+      <p id="execText"></p>
+      <p style="margin-top:12px" class="callout" id="appetite"></p>
     </div>
-    <div class="hero-radar" id="radarWrap">
-      <svg class="radar-svg" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
-        <!-- rings -->
-        <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(0,212,255,0.08)" stroke-width="1"/>
-        <circle cx="80" cy="80" r="50" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="1"/>
-        <circle cx="80" cy="80" r="30" fill="none" stroke="rgba(0,212,255,0.14)" stroke-width="1"/>
-        <circle cx="80" cy="80" r="12" fill="none" stroke="rgba(0,212,255,0.2)" stroke-width="1"/>
-        <!-- crosshairs -->
-        <line x1="80" y1="10" x2="80" y2="150" stroke="rgba(0,212,255,0.06)" stroke-width="1"/>
-        <line x1="10" y1="80" x2="150" y2="80" stroke="rgba(0,212,255,0.06)" stroke-width="1"/>
-        <!-- sweep -->
-        <g id="radar-sweep">
-          <path d="M80,80 L150,80 A70,70 0 0,0 80,10 Z" fill="url(#sweepGrad)" opacity="0.7"/>
-          <line x1="80" y1="80" x2="150" y2="80" stroke="rgba(0,212,255,0.6)" stroke-width="1"/>
-        </g>
-        <!-- blips -->
-        <circle cx="110" cy="55" r="2.5" fill="var(--red)" opacity="0.8" class="blip"/>
-        <circle cx="60"  cy="100" r="2" fill="var(--amber)" opacity="0.7" class="blip"/>
-        <circle cx="95"  cy="110" r="1.5" fill="var(--green)" opacity="0.9" class="blip"/>
-        <circle cx="45"  cy="60"  r="2" fill="var(--cyan)" opacity="0.6" class="blip"/>
-        <!-- center -->
-        <circle cx="80" cy="80" r="3" fill="var(--cyan)" opacity="0.9"/>
-        <circle cx="80" cy="80" r="6" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1" opacity="0.8"/>
-        <defs>
-          <radialGradient id="sweepGrad" cx="0%" cy="0%" r="100%">
-            <stop offset="0%"   stop-color="rgba(0,212,255,0.25)"/>
-            <stop offset="100%" stop-color="rgba(0,212,255,0)"/>
-          </radialGradient>
-        </defs>
-      </svg>
+    <div class="card">
+      <h4 class="eyebrow" style="margin-bottom:10px">Scope &amp; method</h4>
+      <ul class="src" style="color:var(--text);font-size:14px">
+        <li>Environment: Terraform for AWS, deployed against LocalStack. No real AWS account or customer data.</li>
+        <li>Scoring: 5×5 likelihood × impact using the five qualitative levels of NIST SP 800-30 Rev. 1 (Very Low → Very High). Likelihood and impact ratings are the assessor's judgment; the rationale is recorded for each.</li>
+        <li>Evidence: Checkov <span class="mono" id="ckv"></span> and this repository's <span class="mono">scan.py</span>, run against the vulnerable baseline and the hardened code.</li>
+        <li>Supports CSF 2.0 risk assessment outcomes: <span id="methodIds"></span></li>
+      </ul>
     </div>
   </div>
+</section>
 
-  <!-- BODY GRID -->
-  <div class="grid-body">
+<div class="divider" aria-hidden="true"><svg viewBox="0 0 2880 70" preserveAspectRatio="none"><path d="M0 35 Q360 10 720 35 T1440 35 T2160 35 T2880 35"/><path d="M0 38 Q360 60 720 38 T1440 38 T2160 38 T2880 38"/></svg></div>
 
-    <!-- ── INPUTS PANEL ── -->
-    <div class="panel-base inputs-panel">
-      <div class="panel-scanline"></div>
-      <div class="matrix-rain" id="rainLeft"></div>
+<section id="matrix" class="reveal">
+  <h2>Risk matrix</h2>
+  <p class="sub">Each finding plotted by likelihood and impact. Switch between inherent risk (before remediation) and residual risk (after) to see every finding move. Cells inside the green outline are within the stated risk tolerance.</p>
+  <div class="seg" role="tablist" id="seg">
+    <span class="knob" id="knob"></span>
+    <button role="tab" data-v="inherent" class="on" aria-selected="true">Inherent</button>
+    <button role="tab" data-v="residual" aria-selected="false">Residual</button>
+  </div>
+  <div style="margin-top:22px" class="mx-wrap">
+    <div class="mx-ylab">Impact →</div>
+    <div class="mx" id="mx"></div>
+    <div class="mx-x" id="mxX"></div>
+    <div class="mx-xt">Likelihood →</div>
+  </div>
+  <div class="legend">
+    <span class="pill low">Low 1–5</span><span class="pill mod">Moderate 6–11</span><span class="pill high">High 12–19</span><span class="pill crit">Critical 20–25</span>
+  </div>
+</section>
 
-      <!-- Likelihood -->
-      <div class="input-block">
-        <div class="sec-eyebrow">Input_01</div>
-        <div class="sec-title">Likelihood Factor</div>
-        <div class="sec-desc">Likelihood based on historical incidents and expert judgment and vector analysis.</div>
-        <div class="like-grid" id="likeGrid"></div>
-        <div class="like-desc hidden" id="likeDesc"></div>
-      </div>
+<div class="divider" aria-hidden="true"><svg viewBox="0 0 2880 70" preserveAspectRatio="none"><path d="M0 35 Q360 10 720 35 T1440 35 T2160 35 T2880 35"/><path d="M0 38 Q360 60 720 38 T1440 38 T2160 38 T2880 38"/></svg></div>
 
-      <!-- Impact -->
-      <div class="input-block">
-        <div class="sec-eyebrow">Input_02</div>
-        <div class="sec-title">Impact Severity</div>
-        <div class="sec-desc">Quantified damage to infrastructure, fiscal assets, and operational continuity.</div>
-        <div class="impact-list" id="impactList"></div>
-      </div>
+<section id="register" class="reveal">
+  <h2>Risk register</h2>
+  <p class="sub">Select a finding for the threat, scoring rationale, remediation, before/after Terraform, mapped controls and evidence.</p>
+  <div class="card table-scroll" style="padding:6px">
+    <table class="reg">
+      <thead><tr><th></th><th>ID</th><th>Finding</th><th>Layer</th><th>Inherent</th><th>Residual</th><th>Owner</th><th>Status</th></tr></thead>
+      <tbody id="regBody"></tbody>
+    </table>
+  </div>
+</section>
 
-      <!-- Actions -->
-      <div class="actions">
-        <button class="exec-btn" id="execBtn" disabled>
-          <span id="execLbl">Execute Calculation</span>
-        </button>
-        <button class="reset-btn hidden" id="resetBtn">↺ Reset</button>
-      </div>
+<div class="divider" aria-hidden="true"><svg viewBox="0 0 2880 70" preserveAspectRatio="none"><path d="M0 35 Q360 10 720 35 T1440 35 T2160 35 T2880 35"/><path d="M0 38 Q360 60 720 38 T1440 38 T2160 38 T2880 38"/></svg></div>
+
+<section id="controls" class="reveal">
+  <h2>Control coverage</h2>
+  <p class="sub">NIST CSF 2.0 subcategories supported by the remediations. Wording is quoted from NIST's official machine-readable CSF 2.0 catalog. NIST SP 800-53 Rev. 5 controls are listed per finding in the register.</p>
+  <div class="card" id="ctlList"></div>
+</section>
+
+<div class="divider" aria-hidden="true"><svg viewBox="0 0 2880 70" preserveAspectRatio="none"><path d="M0 35 Q360 10 720 35 T1440 35 T2160 35 T2880 35"/><path d="M0 38 Q360 60 720 38 T1440 38 T2160 38 T2880 38"/></svg></div>
+
+<section id="evidence" class="reveal">
+  <h2>Evidence</h2>
+  <p class="sub">Unedited tool output. Reproduce it with <span class="mono">python3 scan.py vulnerable</span>, <span class="mono">python3 scan.py .</span> and <span class="mono">checkov -d . --skip-path vulnerable</span>. CI runs the same commands on every push.</p>
+  <div class="card cmp" id="ckCmp" style="margin-bottom:18px"></div>
+  <div class="grid2">
+    <div class="term"><div class="bar"><i></i><i></i><i></i>&nbsp; python3 scan.py vulnerable · exit 1</div><pre id="scanBefore"></pre></div>
+    <div class="term"><div class="bar"><i></i><i></i><i></i>&nbsp; python3 scan.py . · exit 0</div><pre id="scanAfter"></pre></div>
+  </div>
+  <h3 style="margin:28px 0 10px;font-size:17px">Accepted risks and design exceptions</h3>
+  <p class="sub" style="margin-bottom:12px">Checkov checks deliberately not satisfied in the hardened code, each with the justification recorded in source.</p>
+  <div class="card table-scroll" style="padding:6px"><table class="reg"><thead><tr><th>Check</th><th>Resource</th><th>Justification</th></tr></thead><tbody id="accBody"></tbody></table></div>
+</section>
+
+<div class="divider" aria-hidden="true"><svg viewBox="0 0 2880 70" preserveAspectRatio="none"><path d="M0 35 Q360 10 720 35 T1440 35 T2160 35 T2880 35"/><path d="M0 38 Q360 60 720 38 T1440 38 T2160 38 T2880 38"/></svg></div>
+
+<section id="add" class="reveal">
+  <h2>Add a risk</h2>
+  <p class="sub">Record an additional risk. It appears in the register and on the matrix and is included in every export. Added risks are saved in this browser only.</p>
+  <form class="card" id="addForm" autocomplete="off">
+    <div class="form">
+      <label style="grid-column:1/-1">Finding<input name="title" required maxlength="120" placeholder="e.g. No backup restore test in the last 12 months" /></label>
+      <label>Layer<select name="layer"><option>Data</option><option>Identity</option><option>Network</option><option>Compute</option><option>Detection</option><option>Governance</option></select></label>
+      <label>Likelihood<select name="L" id="fL"></select></label>
+      <label>Impact<select name="I" id="fI"></select></label>
+      <label>Owner<input name="owner" maxlength="60" placeholder="Team or role" /></label>
     </div>
-
-    <!-- ── MATRIX PANEL ── -->
-    <div class="panel-base matrix-panel">
-      <div class="panel-scanline" style="animation-duration:9s;animation-delay:-3s;"></div>
-      <div class="matrix-hdr">
-        <div class="matrix-hdr-left">
-          <div>
-            <div class="matrix-hdr-title">Risk Coordinate Matrix</div>
-            <div class="matrix-hdr-sub mono">NIST_SP_800-30 / 5×5 Probability Grid</div>
-          </div>
-        </div>
-        <div class="matrix-modes">
-          <button class="mode-btn active" onclick="setMode('score')">Score</button>
-          <button class="mode-btn" onclick="setMode('heat')">Heat</button>
-          <button class="mode-btn" onclick="setMode('clean')">Clean</button>
-        </div>
-      </div>
-
-      <div class="matrix-body" id="matrixBody">
-        <div class="matrix-y-labels" id="yLabels"></div>
-        <div class="matrix-grid-wrap" style="flex:1;">
-          <div class="matrix-wrap" style="position:relative;">
-            <div class="matrix-crosshair-h" id="crossH"></div>
-            <div class="matrix-crosshair-v" id="crossV"></div>
-            <div class="matrix-grid" id="matrixGrid"></div>
-          </div>
-          <div class="matrix-x-labels" id="xLabels"></div>
-          <div class="matrix-x-axis-label">Likelihood →</div>
-        </div>
-      </div>
+    <div class="preview">
+      <span class="big mono" id="pvScore">–</span><span id="pvPill"></span>
+      <button class="btn primary" type="submit" style="margin-left:auto">Add to register</button>
     </div>
+  </form>
+</section>
 
-    <!-- ── TELEMETRY PANEL ── -->
-    <div class="panel-base telem-panel">
-      <div class="telem-top">
-        <div class="score-block">
-          <div class="score-lbl">Computed Risk Score</div>
-          <div class="score-val mono" id="scoreVal">00</div>
-          <div class="tier-pill hidden" id="tierPill">—</div>
-        </div>
-        <div class="formula-block">
-          <div class="formula-lbl">Formula Breakdown</div>
-          <div class="formula-eq" id="formulaEq">
-            <span class="hl">L</span>(00) × <span class="hl">I</span>(00) = <span class="eq-result">00</span>
-          </div>
-          <div class="sparkline-wrap">
-            <div class="sparkline-lbl">Session Risk Trace</div>
-            <svg class="sparkline-svg" id="sparklineSvg" viewBox="0 0 260 40" preserveAspectRatio="none">
-              <polyline id="sparklineLine" points="" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-linejoin="round"/>
-              <polyline id="sparklineArea" points="" fill="url(#sparkGrad)" stroke="none"/>
-              <defs>
-                <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stop-color="rgba(0,212,255,0.15)"/>
-                  <stop offset="100%" stop-color="rgba(0,212,255,0)"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- Log -->
-      <div class="log-wrap">
-        <div class="log-header">
-          <div class="log-title mono">// Evidence_Stream</div>
-          <div class="log-indicators">
-            <div class="log-ind" id="ind1"></div>
-            <div class="log-ind" id="ind2"></div>
-            <div class="log-ind" id="ind3"></div>
-          </div>
-        </div>
-        <div class="log-body" id="logBody">
-          <div class="log-empty">Awaiting parameters — execute calculation to stream evidence</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── THREAT META ── -->
-    <div class="threat-meta hidden" id="threatMeta">
-      <div class="panel-base tm-panel">
-        <span class="tm-label">Resource Impact</span>
-        <div class="risk-bar-wrap">
-          <div class="risk-bar-track">
-            <div class="risk-bar-fill" id="riskBarFill"></div>
-          </div>
-          <div class="risk-bar-labels"><span>0</span><span>25</span></div>
-        </div>
-        <div class="tm-body" id="resourceText">—</div>
-      </div>
-      <div class="panel-base tm-panel">
-        <span class="tm-label">Response Protocol</span>
-        <div class="proto-badge" id="protoBadge">—</div>
-        <div class="tm-body" id="protoText">—</div>
-      </div>
-      <div class="panel-base tm-panel">
-        <span class="tm-label">Audit Evidence</span>
-        <div class="audit-file">
-          <div class="audit-file-icon">ZIP</div>
-          <div>
-            <div class="audit-file-name mono" id="auditFileName">ATTACHMENT_0000.ZIP</div>
-            <div class="audit-file-size mono" id="auditFileSize">0.0 KB · AES-256-GCM</div>
-          </div>
-        </div>
-        <div class="tm-body">Assessment evidence from the primary ingress gateway during peak observed event window. Chain of custody maintained.</div>
-      </div>
-    </div>
-
-  </div><!-- /grid-body -->
+<section id="sources" class="reveal">
+  <h2>Sources</h2>
+  <ul class="src">
+    <li>NIST, <a href="https://doi.org/10.6028/NIST.CSWP.29">The NIST Cybersecurity Framework (CSF) 2.0</a>, CSWP 29, 2024. Subcategory text taken from NIST's OSCAL catalog in <a href="https://github.com/usnistgov/oscal-content/tree/main/nist.gov/CSF/v2.0">usnistgov/oscal-content</a>.</li>
+    <li>NIST, <a href="https://doi.org/10.6028/NIST.SP.800-53r5">SP 800-53 Rev. 5, Security and Privacy Controls</a>. Control titles from the <a href="https://github.com/usnistgov/oscal-content/tree/main/nist.gov/SP800-53/rev5">official OSCAL catalog</a>.</li>
+    <li>NIST, <a href="https://doi.org/10.6028/NIST.SP.800-30r1">SP 800-30 Rev. 1, Guide for Conducting Risk Assessments</a>: likelihood × impact method and the five qualitative levels.</li>
+    <li><a href="https://github.com/bridgecrewio/checkov">Checkov</a> (Palo Alto Networks / Bridgecrew), static analysis for infrastructure as code. Check IDs on this page are from an actual run.</li>
+    <li>HashiCorp, <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs">Terraform AWS provider documentation</a>.</li>
+  </ul>
+  <p class="callout warn" style="margin-top:18px">Educational simulation. Resources target LocalStack; account IDs, bucket names and the AMI are placeholders. Risk ratings reflect the assessor's judgment for this scenario and are not an audit opinion.</p>
+</section>
 </main>
 
-<!-- ══ FOOTER ════════════════════════════════ -->
 <footer>
-  <div class="ft-left">
-    <div class="ft-status"><div class="ft-dot green"></div><span class="ft-lbl">Assessment Ready</span></div>
-    <div class="ft-status"><div class="ft-dot cyan"></div><span class="ft-lbl">Session Active</span></div>
-    <div class="ft-status"><div class="ft-dot gray" id="ftPhaseDot"></div><span class="ft-lbl" id="ftPhaseLbl">Idle</span></div>
-  </div>
-  <div class="ft-right mono" id="ftMeta">Terminal_Session 8829-001-ALPHA // 00:00:00</div>
+  <div>NIST Risk Assessment · Report data generated <span id="gen"></span> · <a href="https://github.com/Arel-Cybersec/Nist-Risk-Assessment">Source on GitHub</a></div>
 </footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<!-- ══════════════════════════════════════════
-     SCRIPT
-══════════════════════════════════════════════ -->
+<script id="report-data" type="application/json">{"generated":"2026-10-16","findings":[{"id":"F-01","title":"Customer PII bucket publicly readable","layer":"Data","asset":"S3 bucket simulated-fintech-customer-data-2026 (PII/PHI)","threat":"Unauthenticated internet actor enumerates and downloads customer records.","vuln":"All four S3 Public Access Block settings disabled and a bucket policy granting s3:GetObject to Principal \"*\".","L":5,"I":5,"rL":1,"rI":5,"owner":"Cloud Platform","status":"Remediated","L_why":"Public buckets are found by automated scanners within hours; no skill or credentials required.","I_why":"Disclosure of regulated PII/PHI: notification duties, regulatory penalties, loss of customer trust.","rL_why":"Public access blocked at the bucket, access limited to one role over TLS. Exposure would need a new misconfiguration, which CI now blocks.","csf":[{"id":"PR.AA-05","text":"Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"},{"id":"PR.DS-01","text":"The confidentiality, integrity, and availability of data-at-rest are protected"},{"id":"PR.PS-01","text":"Configuration management practices are established and applied"}],"sp":[{"id":"AC-3","title":"Access Enforcement"},{"id":"AC-6","title":"Least Privilege"},{"id":"SC-7","title":"Boundary Protection"}],"fix":"Enabled all four Public Access Block settings, disabled ACLs (BucketOwnerEnforced), and replaced the wildcard principal with the application role plus a statement that denies any non-TLS request.","checkov_before":[{"id":"CKV_AWS_53","name":"Ensure S3 bucket has block public ACLS enabled","resource":"aws_s3_bucket_public_access_block.open_block"},{"id":"CKV_AWS_54","name":"Ensure S3 bucket has block public policy enabled","resource":"aws_s3_bucket_public_access_block.open_block"},{"id":"CKV_AWS_55","name":"Ensure S3 bucket has ignore public ACLs enabled","resource":"aws_s3_bucket_public_access_block.open_block"},{"id":"CKV_AWS_56","name":"Ensure S3 bucket has 'restrict_public_buckets' enabled","resource":"aws_s3_bucket_public_access_block.open_block"},{"id":"CKV_AWS_70","name":"Ensure S3 bucket does not allow an action with any Principal","resource":"aws_s3_bucket_policy.public_read"},{"id":"CKV2_AWS_6","name":"Ensure that S3 bucket has a Public Access block","resource":"aws_s3_bucket.fintech_storage"}],"scan_before":[{"severity":"CRITICAL","resource":"aws_s3_bucket_public_access_block.open_block","message":"S3 public access block disabled (block_public_acls = false)"},{"severity":"CRITICAL","resource":"aws_s3_bucket_public_access_block.open_block","message":"S3 public access block disabled (block_public_policy = false)"},{"severity":"CRITICAL","resource":"aws_s3_bucket_public_access_block.open_block","message":"S3 public access block disabled (ignore_public_acls = false)"},{"severity":"CRITICAL","resource":"aws_s3_bucket_public_access_block.open_block","message":"S3 public access block disabled (restrict_public_buckets = false)"},{"severity":"CRITICAL","resource":"aws_s3_bucket_policy.public_read","message":"Bucket policy allows any principal (\"*\")"}],"code":[{"before_file":"vulnerable/s3.tf","before":"resource \"aws_s3_bucket_public_access_block\" \"open_block\" {\n  bucket = aws_s3_bucket.fintech_storage.id\n\n  block_public_acls       = false\n  block_public_policy     = false\n  ignore_public_acls      = false\n  restrict_public_buckets = false\n}","after_file":"s3.tf","after":"# REMEDIATION F-01: Explicitly enabling ALL Public Access Blocks\nresource \"aws_s3_bucket_public_access_block\" \"secure_block\" {\n  bucket = aws_s3_bucket.fintech_storage.id\n\n  block_public_acls       = true\n  block_public_policy     = true\n  ignore_public_acls      = true\n  restrict_public_buckets = true\n}"},{"before_file":"vulnerable/s3.tf","before":"resource \"aws_s3_bucket_policy\" \"public_read\" {\n  bucket = aws_s3_bucket.fintech_storage.id\n\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [\n      {\n        Sid       = \"PublicRead\"\n        Effect    = \"Allow\"\n        Principal = \"*\"\n        Action    = \"s3:GetObject\"\n        Resource  = \"${aws_s3_bucket.fintech_storage.arn}/*\"\n      }\n    ]\n  })\n}","after_file":"s3.tf","after":"# Secure Bucket Policy: only the internal app role, and only over TLS (F-01, F-05)\nresource \"aws_s3_bucket_policy\" \"restrict_internal_only\" {\n  bucket     = aws_s3_bucket.fintech_storage.id\n  depends_on = [aws_s3_bucket_public_access_block.secure_block]\n\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [\n      {\n        Sid       = \"AllowInternalAppRoleOnly\"\n        Effect    = \"Allow\"\n        Principal = { AWS = aws_iam_role.app_role.arn }\n        Action    = [\"s3:GetObject\", \"s3:PutObject\"]\n        Resource  = \"${aws_s3_bucket.fintech_storage.arn}/*\"\n      },\n      {\n        Sid       = \"DenyInsecureTransport\"\n        Effect    = \"Deny\"\n        Principal = \"*\"\n        Action    = \"s3:*\"\n        Resource  = [aws_s3_bucket.fintech_storage.arn, \"${aws_s3_bucket.fintech_storage.arn}/*\"]\n        Condition = { Bool = { \"aws:SecureTransport\" = \"false\" } }\n      }\n    ]\n  })\n}"}]},{"id":"F-02","title":"Administrative wildcard granted to developers","layer":"Identity","asset":"IAM group FinTech-Developers / user dev-analyst-01","threat":"A phished or leaked developer credential becomes full account takeover.","vuln":"Group policy allows Action \"*\" on Resource \"*\"; access is through a long-lived IAM user with no MFA requirement.","L":4,"I":5,"rL":1,"rI":3,"owner":"Identity & Access","status":"Remediated","L_why":"Developer credentials are a common phishing and leak target; one compromise is enough.","I_why":"Full administrative control over every resource, including deleting logs and backups.","rL_why":"No standing user credentials; the role needs MFA. Blast radius limited to one bucket and tagged instances.","csf":[{"id":"PR.AA-01","text":"Identities and credentials for authorized users, services, and hardware are managed by the organization"},{"id":"PR.AA-03","text":"Users, services, and hardware are authenticated"},{"id":"PR.AA-05","text":"Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"}],"sp":[{"id":"AC-6","title":"Least Privilege"},{"id":"AC-6(9)","title":"Log Use of Privileged Functions"},{"id":"IA-2(1)","title":"Multi-factor Authentication to Privileged Accounts"}],"fix":"Removed the IAM user and the wildcard policy. Developers now assume FinTechDeveloperRole, which requires MFA, and get read/write on the data bucket only and start/stop only on instances tagged FinTech-Core-App.","checkov_before":[{"id":"CKV_AWS_62","name":"Ensure IAM policies that allow full \"*-*\" administrative privileges are not created","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_63","name":"Ensure no IAM policies documents allow \"*\" as a statement's actions","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_286","name":"Ensure IAM policies does not allow privilege escalation","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_287","name":"Ensure IAM policies does not allow credentials exposure","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_288","name":"Ensure IAM policies does not allow data exfiltration","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_289","name":"Ensure IAM policies does not allow permissions management / resource exposure without constraints","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_290","name":"Ensure IAM policies does not allow write access without constraints","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_355","name":"Ensure no IAM policies documents allow \"*\" as a statement's resource for restrictable actions","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV2_AWS_40","name":"Ensure AWS IAM policy does not allow full IAM privileges","resource":"aws_iam_group_policy.admin_policy"},{"id":"CKV_AWS_273","name":"Ensure access is controlled through SSO and not AWS IAM defined users","resource":"aws_iam_user.vulnerable_user"}],"scan_before":[{"severity":"CRITICAL","resource":"aws_iam_group_policy.admin_policy","message":"IAM policy allows all actions (Action = \"*\")"},{"severity":"MEDIUM","resource":"aws_iam_user.vulnerable_user","message":"Long-lived IAM user; use federated roles with MFA"}],"code":[{"before_file":"vulnerable/iam.tf","before":"resource \"aws_iam_group_policy\" \"admin_policy\" {\n  name  = \"DevAdminPolicy\"\n  group = aws_iam_group.fintech_dev_group.name\n\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [\n      {\n        Effect   = \"Allow\"\n        Action   = \"*\"\n        Resource = \"*\"\n      }\n    ]\n  })\n}","after_file":"iam.tf","after":"# REMEDIATION F-02: Scoped least-privilege policy (no administrative wildcards)\nresource \"aws_iam_policy\" \"secure_developer_policy\" {\n  name        = \"SecureDevPolicy\"\n  description = \"Least-privilege developer access to the FinTech application tier\"\n\n  policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [\n      {\n        Sid    = \"RestrictedS3Access\"\n        Effect = \"Allow\"\n        Action = [\"s3:GetObject\", \"s3:PutObject\", \"s3:ListBucket\"]\n        Resource = [\n          aws_s3_bucket.fintech_storage.arn,\n          \"${aws_s3_bucket.fintech_storage.arn}/*\"\n        ]\n      },\n      {\n        # Describe* actions do not support resource-level permissions in IAM\n        Sid      = \"ReadOnlyEC2Inventory\"\n        Effect   = \"Allow\"\n        Action   = \"ec2:DescribeInstances\"\n        Resource = \"*\"\n      },\n      {\n        Sid      = \"StartStopTaggedAppInstancesOnly\"\n        Effect   = \"Allow\"\n        Action   = [\"ec2:StartInstances\", \"ec2:StopInstances\"]\n        Resource = \"arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:instance/*\"\n        Condition = {\n          StringEquals = { \"aws:ResourceTag/Name\" = \"FinTech-Core-App\" }\n        }\n      },\n      {\n        Sid      = \"UseDataKey\"\n        Effect   = \"Allow\"\n        Action   = [\"kms:Decrypt\", \"kms:GenerateDataKey\"]\n        Resource = aws_kms_key.data.arn\n      }\n    ]\n  })\n}"},{"before_file":"vulnerable/iam.tf","before":"resource \"aws_iam_user\" \"vulnerable_user\" {\n  name = \"dev-analyst-01\"\n}","after_file":"iam.tf","after":"# ── Developer access ─────────────────────────────────────────────────\n# REMEDIATION F-02: No long-lived IAM users. Developers assume a role, and only with MFA.\nresource \"aws_iam_role\" \"developer\" {\n  name                 = \"FinTechDeveloperRole\"\n  max_session_duration = 3600\n\n  assume_role_policy = jsonencode({\n    Version = \"2012-10-17\"\n    Statement = [{\n      Effect    = \"Allow\"\n      Principal = { AWS = \"arn:aws:iam::${data.aws_caller_identity.current.account_id}:root\" }\n      Action    = \"sts:AssumeRole\"\n      Condition = { Bool = { \"aws:MultiFactorAuthPresent\" = \"true\" } }\n    }]\n  })\n}"}]},{"id":"F-03","title":"Sensitive data not encrypted at rest","layer":"Data","asset":"S3 data bucket and EC2 root volume","threat":"Data is readable from storage media, snapshots or a mis-shared copy without any key control.","vuln":"No server-side encryption configuration on the PII bucket; EC2 root volume encrypted = false; no versioning.","L":3,"I":4,"rL":1,"rI":4,"owner":"Cloud Platform","status":"Remediated","L_why":"Needs a second failure (leaked snapshot or copy) to be exploited, but such leaks are routine.","I_why":"Same regulated data as F-01; also no versioning to recover from deletion or ransomware.","rL_why":"Customer-managed KMS key with rotation on bucket, volume and logs; versioning and lifecycle enabled.","csf":[{"id":"PR.DS-01","text":"The confidentiality, integrity, and availability of data-at-rest are protected"}],"sp":[{"id":"SC-12","title":"Cryptographic Key Establishment and Management"},{"id":"SC-28","title":"Protection of Information at Rest"}],"fix":"Added a customer-managed KMS key with annual rotation, SSE-KMS on the bucket with versioning and a noncurrent-version lifecycle, and an encrypted gp3 root volume using the same key.","checkov_before":[{"id":"CKV_AWS_145","name":"Ensure that S3 buckets are encrypted with KMS by default","resource":"aws_s3_bucket.fintech_storage"},{"id":"CKV_AWS_21","name":"Ensure all data stored in the S3 bucket have versioning enabled","resource":"aws_s3_bucket.fintech_storage"},{"id":"CKV_AWS_8","name":"Ensure all data stored in the Launch configuration or instance Elastic Blocks Store is securely encrypted","resource":"aws_instance.app_server"},{"id":"CKV2_AWS_61","name":"Ensure that an S3 bucket has a lifecycle configuration","resource":"aws_s3_bucket.fintech_storage"}],"scan_before":[{"severity":"HIGH","resource":"aws_instance.app_server","message":"EC2 root volume is not encrypted"},{"severity":"HIGH","resource":"aws_s3_bucket.fintech_storage","message":"S3 bucket has no server-side encryption configuration"}],"code":[{"before_file":"vulnerable/main.tf","before":"resource \"aws_instance\" \"app_server\" {\n  ami                    = \"ami-0c55b159cbfafe1f0\"\n  instance_type          = \"t2.micro\"\n  subnet_id              = aws_subnet.public_subnet.id\n  vpc_security_group_ids = [aws_security_group.open_sg.id]\n\n  metadata_options {\n    http_tokens = \"optional\"\n  }\n\n  root_block_device {\n    encrypted = false\n  }\n\n  tags = {\n    Name        = \"FinTech-Core-App\"\n    Environment = \"Production\"\n  }\n}","after_file":"main.tf","after":"# REMEDIATION F-06: Hardened application instance\nresource \"aws_instance\" \"app_server\" {\n  ami                    = var.app_ami_id\n  instance_type          = \"t3.micro\"\n  subnet_id              = aws_subnet.public_subnet.id\n  vpc_security_group_ids = [aws_security_group.secure_sg.id]\n  iam_instance_profile   = aws_iam_instance_profile.app.name\n  monitoring             = true\n  ebs_optimized          = true\n\n  metadata_options {\n    http_endpoint               = \"enabled\"\n    http_tokens                 = \"required\" # IMDSv2 only\n    http_put_response_hop_limit = 1\n  }\n\n  root_block_device {\n    encrypted   = true\n    kms_key_id  = aws_kms_key.data.arn\n    volume_type = \"gp3\"\n  }\n\n  tags = {\n    Name        = \"FinTech-Core-App\"\n    Environment = \"Production\"\n  }\n}"},{"before_file":null,"before":null,"after_file":"s3.tf","after":"# REMEDIATION F-03: SSE-KMS encryption and versioning\nresource \"aws_s3_bucket_server_side_encryption_configuration\" \"fintech_storage\" {\n  bucket = aws_s3_bucket.fintech_storage.id\n  rule {\n    apply_server_side_encryption_by_default {\n      sse_algorithm     = \"aws:kms\"\n      kms_master_key_id = aws_kms_key.data.arn\n    }\n    bucket_key_enabled = true\n  }\n}"}]},{"id":"F-04","title":"No audit trail or network monitoring","layer":"Detection","asset":"AWS account, VPC fintech-vpc, data bucket","threat":"An intrusion or data theft goes unnoticed and cannot be investigated afterwards.","vuln":"No CloudTrail, no VPC flow logs, no S3 access logging and no detailed instance monitoring.","L":4,"I":4,"rL":2,"rI":2,"owner":"Security Operations","status":"Remediated","L_why":"Without logs every other control failure is silent; there is no detection capability at all.","I_why":"No evidence for incident response, forensics or regulators; dwell time is unbounded.","rL_why":"Multi-region CloudTrail with log file validation and S3 data events, flow logs, access logs, all KMS-encrypted with 365-day retention.","csf":[{"id":"PR.PS-04","text":"Log records are generated and made available for continuous monitoring"},{"id":"DE.CM-01","text":"Networks and network services are monitored to find potentially adverse events"},{"id":"DE.CM-03","text":"Personnel activity and technology usage are monitored to find potentially adverse events"},{"id":"DE.CM-09","text":"Computing hardware and software, runtime environments, and their data are monitored to find potentially adverse events"}],"sp":[{"id":"AU-2","title":"Event Logging"},{"id":"AU-9","title":"Protection of Audit Information"},{"id":"AU-12","title":"Audit Record Generation"},{"id":"SI-4","title":"System Monitoring"}],"fix":"Added a multi-region CloudTrail (log file validation, KMS, CloudWatch delivery, S3 object-level events on the PII bucket), VPC flow logs, S3 server access logging to a dedicated audit bucket and detailed EC2 monitoring.","checkov_before":[{"id":"CKV2_AWS_11","name":"Ensure VPC flow logging is enabled in all VPCs","resource":"aws_vpc.fintech_vpc"},{"id":"CKV_AWS_18","name":"Ensure the S3 bucket has access logging enabled","resource":"aws_s3_bucket.fintech_storage"},{"id":"CKV_AWS_126","name":"Ensure that detailed monitoring is enabled for EC2 instances","resource":"aws_instance.app_server"}],"scan_before":[{"severity":"HIGH","resource":"(project)","message":"No CloudTrail with log file validation enabled"},{"severity":"MEDIUM","resource":"aws_vpc.fintech_vpc","message":"VPC has no flow logs"},{"severity":"MEDIUM","resource":"aws_s3_bucket.fintech_storage","message":"S3 bucket has no server access logging"}],"code":[{"before_file":null,"before":null,"after_file":"logging.tf","after":"resource \"aws_cloudtrail\" \"main\" {\n  name                          = \"fintech-audit-trail\"\n  s3_bucket_name                = aws_s3_bucket.audit_logs.id\n  s3_key_prefix                 = \"cloudtrail\"\n  is_multi_region_trail         = true\n  include_global_service_events = true\n  enable_log_file_validation    = true\n  kms_key_id                    = aws_kms_key.data.arn\n  sns_topic_name                = aws_sns_topic.cloudtrail.name\n  cloud_watch_logs_group_arn    = \"${aws_cloudwatch_log_group.cloudtrail.arn}:*\"\n  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_to_cw.arn\n\n  # Object-level access to the PII bucket is recorded, not just management events\n  event_selector {\n    read_write_type           = \"All\"\n    include_management_events = true\n\n    data_resource {\n      type   = \"AWS::S3::Object\"\n      values = [\"${aws_s3_bucket.fintech_storage.arn}/\"]\n    }\n  }\n\n  depends_on = [aws_s3_bucket_policy.audit_logs]\n}"},{"before_file":null,"before":null,"after_file":"logging.tf","after":"resource \"aws_flow_log\" \"vpc\" {\n  vpc_id          = aws_vpc.fintech_vpc.id\n  traffic_type    = \"ALL\"\n  log_destination = aws_cloudwatch_log_group.flow_logs.arn\n  iam_role_arn    = aws_iam_role.flow_logs.arn\n}"}]},{"id":"F-05","title":"SSH exposed to the internet; plaintext HTTP","layer":"Network","asset":"Security group open-api-sg / app server","threat":"Brute-force or exploit of SSH from anywhere; interception of web traffic in transit.","vuln":"Ingress 22/tcp and 80/tcp from 0.0.0.0/0, all egress allowed, public IPs assigned by default, default SG not restricted.","L":5,"I":4,"rL":1,"rI":4,"owner":"Network Engineering","status":"Remediated","L_why":"Internet-wide SSH scanning is constant; an exposed port 22 is probed within minutes.","I_why":"Shell on the production application server, with a path to the data tier.","rL_why":"No management ports at all: admin access is through SSM Session Manager (IAM-authenticated, logged). Only HTTPS is exposed.","csf":[{"id":"PR.IR-01","text":"Networks and environments are protected from unauthorized logical access and usage"},{"id":"PR.DS-02","text":"The confidentiality, integrity, and availability of data-in-transit are protected"},{"id":"DE.CM-01","text":"Networks and network services are monitored to find potentially adverse events"}],"sp":[{"id":"SC-7","title":"Boundary Protection"},{"id":"SC-7(5)","title":"Deny by Default — Allow by Exception"},{"id":"SC-8","title":"Transmission Confidentiality and Integrity"},{"id":"AC-17","title":"Remote Access"}],"fix":"Removed SSH (the old /32 allowlist used a private 192.168.x address, which can never match internet traffic). Admin access moves to SSM. Only 443 is open inbound, egress is limited to 443, the default SG denies everything and public IPs are no longer auto-assigned.","checkov_before":[{"id":"CKV_AWS_24","name":"Ensure no security groups allow ingress from 0.0.0.0:0 to port 22","resource":"aws_security_group.open_sg"},{"id":"CKV_AWS_260","name":"Ensure no security groups allow ingress from 0.0.0.0:0 to port 80","resource":"aws_security_group.open_sg"},{"id":"CKV_AWS_382","name":"Ensure no security groups allow egress from 0.0.0.0:0 to port -1","resource":"aws_security_group.open_sg"},{"id":"CKV_AWS_130","name":"Ensure VPC subnets do not assign public IP by default","resource":"aws_subnet.public_subnet"},{"id":"CKV2_AWS_12","name":"Ensure the default security group of every VPC restricts all traffic","resource":"aws_vpc.fintech_vpc"}],"scan_before":[{"severity":"CRITICAL","resource":"aws_security_group.open_sg","message":"Management port (22/3389) open to the internet"},{"severity":"MEDIUM","resource":"aws_security_group.open_sg","message":"Plaintext HTTP (80) open to the internet"}],"code":[{"before_file":"vulnerable/main.tf","before":"resource \"aws_security_group\" \"open_sg\" {\n  name        = \"open-api-sg\"\n  description = \"Default-open security group\"\n  vpc_id      = aws_vpc.fintech_vpc.id\n\n  ingress {\n    description = \"SSH from anywhere\"\n    from_port   = 22\n    to_port     = 22\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n\n  ingress {\n    description = \"HTTP from anywhere\"\n    from_port   = 80\n    to_port     = 80\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n\n  egress {\n    description = \"All outbound\"\n    from_port   = 0\n    to_port     = 0\n    protocol    = \"-1\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}","after_file":"main.tf","after":"# REMEDIATION F-05: No management ports at all. Admin access is via SSM Session Manager.\n# Only HTTPS is exposed; plaintext HTTP is removed.\nresource \"aws_security_group\" \"secure_sg\" {\n  name        = \"secure-api-sg\"\n  description = \"Hardened security group for FinTech web instances\"\n  vpc_id      = aws_vpc.fintech_vpc.id\n\n  ingress {\n    description = \"Public HTTPS for the web application\"\n    from_port   = 443\n    to_port     = 443\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n\n  egress {\n    description = \"HTTPS out for SSM, package updates and AWS APIs\"\n    from_port   = 443\n    to_port     = 443\n    protocol    = \"tcp\"\n    cidr_blocks = [\"0.0.0.0/0\"]\n  }\n}"}]},{"id":"F-06","title":"Instance metadata (IMDSv1) and host hardening","layer":"Compute","asset":"EC2 instance FinTech-Core-App","threat":"SSRF in the web app reads instance credentials from the metadata service.","vuln":"metadata_options http_tokens = \"optional\" (IMDSv1), no instance role, not EBS-optimised, no detailed monitoring.","L":3,"I":4,"rL":1,"rI":4,"owner":"Cloud Platform","status":"Remediated","L_why":"SSRF is a common web flaw and IMDSv1 needs only a single GET request to exploit.","I_why":"Stolen instance credentials grant whatever the instance can reach.","rL_why":"IMDSv2 required with hop limit 1, so a plain SSRF GET can no longer reach credentials.","csf":[{"id":"PR.PS-01","text":"Configuration management practices are established and applied"},{"id":"PR.AA-05","text":"Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed, and incorporate the principles of least privilege and separation of duties"}],"sp":[{"id":"CM-6","title":"Configuration Settings"},{"id":"CM-7","title":"Least Functionality"},{"id":"AC-6","title":"Least Privilege"}],"fix":"Required IMDSv2 tokens with a hop limit of 1, attached a least-privilege instance role (SSM only), and enabled detailed monitoring and EBS optimisation.","checkov_before":[{"id":"CKV_AWS_79","name":"Ensure Instance Metadata Service Version 1 is not enabled","resource":"aws_instance.app_server"},{"id":"CKV_AWS_135","name":"Ensure that EC2 is EBS optimized","resource":"aws_instance.app_server"},{"id":"CKV2_AWS_41","name":"Ensure an IAM role is attached to EC2 instance","resource":"aws_instance.app_server"}],"scan_before":[{"severity":"HIGH","resource":"aws_instance.app_server","message":"IMDSv1 allowed; set metadata_options.http_tokens = \"required\""}],"code":[{"before_file":"vulnerable/main.tf","before":"resource \"aws_instance\" \"app_server\" {\n  ami                    = \"ami-0c55b159cbfafe1f0\"\n  instance_type          = \"t2.micro\"\n  subnet_id              = aws_subnet.public_subnet.id\n  vpc_security_group_ids = [aws_security_group.open_sg.id]\n\n  metadata_options {\n    http_tokens = \"optional\"\n  }\n\n  root_block_device {\n    encrypted = false\n  }\n\n  tags = {\n    Name        = \"FinTech-Core-App\"\n    Environment = \"Production\"\n  }\n}","after_file":"main.tf","after":"# REMEDIATION F-06: Hardened application instance\nresource \"aws_instance\" \"app_server\" {\n  ami                    = var.app_ami_id\n  instance_type          = \"t3.micro\"\n  subnet_id              = aws_subnet.public_subnet.id\n  vpc_security_group_ids = [aws_security_group.secure_sg.id]\n  iam_instance_profile   = aws_iam_instance_profile.app.name\n  monitoring             = true\n  ebs_optimized          = true\n\n  metadata_options {\n    http_endpoint               = \"enabled\"\n    http_tokens                 = \"required\" # IMDSv2 only\n    http_put_response_hop_limit = 1\n  }\n\n  root_block_device {\n    encrypted   = true\n    kms_key_id  = aws_kms_key.data.arn\n    volume_type = \"gp3\"\n  }\n\n  tags = {\n    Name        = \"FinTech-Core-App\"\n    Environment = \"Production\"\n  }\n}"}]}],"accepted":[{"id":"CKV2_AWS_62","name":"Ensure S3 buckets should have event notifications enabled","resource":"aws_s3_bucket.fintech_storage","why":"Event notifications are not required by any finding in the risk register"},{"id":"CKV2_AWS_62","name":"Ensure S3 buckets should have event notifications enabled","resource":"aws_s3_bucket.audit_logs","why":"Event notifications are not required by any finding in the risk register"},{"id":"CKV_AWS_18","name":"Ensure the S3 bucket has access logging enabled","resource":"aws_s3_bucket.audit_logs","why":"This is the log destination; logging it to itself would loop"},{"id":"CKV_AWS_144","name":"Ensure that S3 bucket has cross-region replication enabled","resource":"aws_s3_bucket.fintech_storage","why":"Cross-region replication is a DR decision outside this assessment's scope"},{"id":"CKV_AWS_144","name":"Ensure that S3 bucket has cross-region replication enabled","resource":"aws_s3_bucket.audit_logs","why":"Cross-region replication is a DR decision outside this assessment's scope"},{"id":"CKV_AWS_145","name":"Ensure that S3 buckets are encrypted with KMS by default","resource":"aws_s3_bucket.audit_logs","why":"S3 server access log delivery only supports SSE-S3 on the target bucket"}],"checkov":{"version":"3.3.29","before":{"passed":14,"failed":33,"skipped":0,"resource_count":11},"after":{"passed":111,"failed":0,"skipped":6,"resource_count":40},"unmapped_before":[{"id":"CKV2_AWS_62","name":"Ensure S3 buckets should have event notifications enabled"},{"id":"CKV_AWS_144","name":"Ensure that S3 bucket has cross-region replication enabled"}]},"scan":{"before":"=== COMPLIANCE AUDIT ===\n [CRITICAL] F-01 vulnerable/s3.tf:12 aws_s3_bucket_public_access_block.open_block: S3 public access block disabled (block_public_acls = false)\n [CRITICAL] F-01 vulnerable/s3.tf:12 aws_s3_bucket_public_access_block.open_block: S3 public access block disabled (block_public_policy = false)\n [CRITICAL] F-01 vulnerable/s3.tf:12 aws_s3_bucket_public_access_block.open_block: S3 public access block disabled (ignore_public_acls = false)\n [CRITICAL] F-01 vulnerable/s3.tf:12 aws_s3_bucket_public_access_block.open_block: S3 public access block disabled (restrict_public_buckets = false)\n [CRITICAL] F-01 vulnerable/s3.tf:21 aws_s3_bucket_policy.public_read: Bucket policy allows any principal (\"*\")\n [CRITICAL] F-02 vulnerable/iam.tf:6 aws_iam_group_policy.admin_policy: IAM policy allows all actions (Action = \"*\")\n [CRITICAL] F-05 vulnerable/main.tf:16 aws_security_group.open_sg: Management port (22/3389) open to the internet\n [HIGH    ] F-03 vulnerable/main.tf:46 aws_instance.app_server: EC2 root volume is not encrypted\n [HIGH    ] F-03 vulnerable/s3.tf:3 aws_s3_bucket.fintech_storage: S3 bucket has no server-side encryption configuration\n [HIGH    ] F-04 vulnerable (project): No CloudTrail with log file validation enabled\n [HIGH    ] F-06 vulnerable/main.tf:46 aws_instance.app_server: IMDSv1 allowed; set metadata_options.http_tokens = \"required\"\n [MEDIUM  ] F-02 vulnerable/iam.tf:22 aws_iam_user.vulnerable_user: Long-lived IAM user; use federated roles with MFA\n [MEDIUM  ] F-04 vulnerable/main.tf:4 aws_vpc.fintech_vpc: VPC has no flow logs\n [MEDIUM  ] F-04 vulnerable/s3.tf:3 aws_s3_bucket.fintech_storage: S3 bucket has no server access logging\n [MEDIUM  ] F-05 vulnerable/main.tf:16 aws_security_group.open_sg: Plaintext HTTP (80) open to the internet\n=== 15 findings (7 CRITICAL, 4 HIGH, 4 MEDIUM) — FAIL ===\n","after":"=== COMPLIANCE AUDIT ===\n=== 0 findings (clean) — PASS ===\n"},"appetite":{"id":"GV.RM-02","text":"Risk appetite and risk tolerance statements are established, communicated, and maintained","tolerance":6},"method":[{"id":"ID.RA-01","text":"Vulnerabilities in assets are identified, validated, and recorded"},{"id":"ID.RA-05","text":"Threats, vulnerabilities, likelihoods, and impacts are used to understand inherent risk and inform risk response prioritization"},{"id":"ID.RA-06","text":"Risk responses are chosen, prioritized, planned, tracked, and communicated"}]}</script>
 <script>
-/* ══ DATA ══════════════════════════════════ */
-const LIKELIHOOD = [
-  { v:1, code:"01", label:"Rare",     desc:"Incredibly low probability. No active exploit vectors observed in current threat intelligence feeds." },
-  { v:2, code:"02", label:"Unlikely", desc:"Requires highly specific misconfiguration. No recent telemetry indicates active reconnaissance." },
-  { v:3, code:"03", label:"Likely",   desc:"Standard target conditions met. Comparable events logged across peer infrastructure in last 90 days." },
-  { v:4, code:"04", label:"Frequent", desc:"Highly vulnerable surface. Multiple incidents recorded in current fiscal cycle." },
-  { v:5, code:"05", label:"Certain",  desc:"Active exploit vectors confirmed. Event already observed multiple times in monitored telemetry." },
-];
-const IMPACT = [
-  { v:1, label:"Insignificant",         short:"Insig" },
-  { v:2, label:"Minor",                 short:"Minor" },
-  { v:3, label:"Moderate",              short:"Mod" },
-  { v:4, label:"Significant Material",  short:"Signif" },
-  { v:5, label:"Catastrophic Failure",  short:"Crit" },
-];
+"use strict";
+const D = JSON.parse(document.getElementById("report-data").textContent);
+const LEVELS = ["Very Low", "Low", "Moderate", "High", "Very High"]; // NIST SP 800-30 Rev. 1 qualitative scale
+const TOL = D.appetite.tolerance;
+const STORE = "nist-ra-custom-risks";
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-let likelihood = null, impact = null, phase = "idle";
-let timers = [], scoreHistory = [], matrixMode = "score";
-
-/* ══ TIER ══════════════════════════════════ */
-function tierFor(s) {
-  if (s >= 20) return { key:"crit", label:"Critical_Threat",    cls:"c-crit" };
-  if (s >= 12) return { key:"high", label:"High_Risk",          cls:"c-high" };
-  if (s >= 6)  return { key:"mod",  label:"Moderate",           cls:"c-mod"  };
-  return               { key:"low",  label:"Low_Risk",           cls:"c-low"  };
+function tier(s) {
+  if (s >= 20) return { k: "crit", label: "Critical" };
+  if (s >= 12) return { k: "high", label: "High" };
+  if (s >= 6)  return { k: "mod",  label: "Moderate" };
+  return { k: "low", label: "Low" };
 }
-function cellTone(s) {
-  if (s >= 20) return "t-crit";
-  if (s >= 15) return "t-vhigh";
-  if (s >= 10) return "t-high";
-  if (s >= 6)  return "t-mod";
-  return "t-low";
-}
-function p2(n){ return String(n).padStart(2,"0"); }
-function nowTs(){ const d=new Date(); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; }
+const pill = (L, I) => { const s = L * I, t = tier(s); return `<span class="pill ${t.k}">${s} · ${t.label}</span>`; };
 
-/* ══ CLOCK ═════════════════════════════════ */
-function tickClock(){
-  const t=nowTs();
-  document.getElementById("hdr-clock").textContent=t;
-  document.getElementById("ftMeta").textContent=`Terminal_Session 8829-001-ALPHA // ${t}`;
-}
-setInterval(tickClock,1000); tickClock();
+let custom = [];
+try { custom = JSON.parse(localStorage.getItem(STORE) || "[]"); } catch (e) { custom = []; }
+function saveCustom() { try { localStorage.setItem(STORE, JSON.stringify(custom)); } catch (e) {} }
+const allRisks = () => D.findings.concat(custom);
 
-/* ══ PRELOADER ══════════════════════════════ */
-const preStatuses = [
-  "INITIALIZING RISK ASSESSMENT…",
-  "LOADING NIST SP 800-30 FRAMEWORK…",
-  "CALIBRATING THREAT MATRICES…",
-  "ESTABLISHING SECURE CHANNEL…",
-  "SYSTEM ONLINE",
-];
-let pIdx=0;
-const preStatus = document.getElementById("preStatus");
-const preInt = setInterval(()=>{
-  pIdx++;
-  if(pIdx<preStatuses.length){ preStatus.textContent=preStatuses[pIdx]; }
-  else{
-    clearInterval(preInt);
-    setTimeout(()=>{ document.getElementById("preloader").classList.add("hidden"); },300);
-  }
-},360);
-
-/* ══ BACKGROUND CANVAS ══════════════════════ */
-(function(){
-  const canvas = document.getElementById("bg-canvas");
-  const ctx = canvas.getContext("2d");
-  let W,H,pts=[];
-  function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
-  resize(); window.addEventListener("resize",resize);
-  for(let i=0;i<60;i++) pts.push({x:Math.random()*2000,y:Math.random()*1200,vx:(Math.random()-.5)*0.12,vy:(Math.random()-.5)*0.12,r:Math.random()*1.2+0.2,a:Math.random()});
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    pts.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy;
-      if(p.x<0)p.x=W; if(p.x>W)p.x=0;
-      if(p.y<0)p.y=H; if(p.y>H)p.y=0;
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-      ctx.fillStyle=`rgba(0,212,255,${p.a*0.5})`;
-      ctx.fill();
-    });
-    // connection lines
-    for(let i=0;i<pts.length;i++){
-      for(let j=i+1;j<pts.length;j++){
-        const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
-        const d=Math.sqrt(dx*dx+dy*dy);
-        if(d<160){
-          ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[j].x,pts[j].y);
-          ctx.strokeStyle=`rgba(0,212,255,${(1-d/160)*0.06})`; ctx.lineWidth=0.5; ctx.stroke();
-        }
-      }
-    }
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
-/* ══ RADAR ANIMATION ═══════════════════════ */
-(function(){
-  const sweep = document.getElementById("radar-sweep");
-  let angle=0;
-  function tick(){
-    angle=(angle+0.8)%360;
-    const rad=angle*Math.PI/180;
-    const ex=80+70*Math.cos(rad), ey=80+70*Math.sin(rad);
-    const la=angle>180?1:0;
-    sweep.querySelector("path").setAttribute("d",`M80,80 L${80+70},80 A70,70 0 ${la},1 ${ex},${ey} Z`);
-    sweep.querySelector("line").setAttribute("x2",ex);
-    sweep.querySelector("line").setAttribute("y2",ey);
-    requestAnimationFrame(tick);
-  }
-  tick();
-})();
-
-/* ══ MATRIX RAIN ═══════════════════════════ */
-function buildRain(el){
-  const chars="01アウエオカキクコサシスセソ!@#$%^&*";
-  for(let i=0;i<4;i++){
-    const col=document.createElement("div");
-    col.className="rain-col";
-    col.style.left=`${i*15}px`;
-    col.style.animationDuration=`${3+Math.random()*4}s`;
-    col.style.animationDelay=`-${Math.random()*5}s`;
-    let txt="";
-    for(let j=0;j<18;j++) txt+=chars[Math.floor(Math.random()*chars.length)];
-    col.textContent=txt;
-    el.appendChild(col);
-  }
-}
-buildRain(document.getElementById("rainLeft"));
-
-/* ══ BUILD LIKELIHOOD ═══════════════════════ */
-const likeGrid = document.getElementById("likeGrid");
-LIKELIHOOD.forEach(o=>{
-  const b=document.createElement("button");
-  b.className="like-btn"; b.dataset.v=o.v;
-  b.innerHTML=`
-    <div class="lripple"></div>
-    <span class="lcode mono">${o.code}</span>
-    <span class="llbl">${o.label}</span>
-    <div class="lbar"></div>`;
-  b.onclick=()=>{ likelihood=o.v; renderInputs(); };
-  likeGrid.appendChild(b);
-});
-
-/* ══ BUILD IMPACT ═══════════════════════════ */
-const impactList = document.getElementById("impactList");
-IMPACT.forEach(o=>{
-  const b=document.createElement("button");
-  b.className="impact-btn"; b.dataset.v=o.v;
-  const dots=[...Array(5)].map((_,i)=>`<div class="sev-dot"></div>`).join("");
-  b.innerHTML=`
-    <div class="ileft">
-      <span class="inum mono">0${o.v}</span>
-      <span class="ilbl">${o.label}</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="impact-sev">${dots}</div>
-      <div class="impact-radio"><div class="impact-radio-dot"></div></div>
-    </div>`;
-  b.onclick=()=>{ impact=o.v; renderInputs(); };
-  impactList.appendChild(b);
-});
-
-/* ══ BUILD MATRIX ═══════════════════════════ */
-const ROWS=[5,4,3,2,1], COLS=[1,2,3,4,5];
-const matrixGrid=document.getElementById("matrixGrid");
-const xLabels=document.getElementById("xLabels");
-const yLabels=document.getElementById("yLabels");
-const yLbls=IMPACT.slice().reverse();
-
-yLbls.forEach((o,i)=>{
-  const d=document.createElement("div");
-  d.className="matrix-y-lbl"; d.dataset.r=ROWS[i]; d.textContent=o.short;
-  yLabels.appendChild(d);
-});
-
-ROWS.forEach(r=>{
-  COLS.forEach(c=>{
-    const s=r*c;
-    const cell=document.createElement("div");
-    cell.className=`cell ${cellTone(s)}`;
-    cell.dataset.r=r; cell.dataset.c=c; cell.dataset.s=s;
-    cell.innerHTML=`
-      <span class="cell-coord">${c},${r}</span>
-      <span class="cell-val mono">${p2(s)}</span>
-      <span class="cell-glyph">◆</span>
-      <div class="reticle-tl"></div><div class="reticle-tr"></div>
-      <div class="reticle-bl"></div><div class="reticle-br"></div>`;
-    matrixGrid.appendChild(cell);
-  });
-});
-
-COLS.forEach(c=>{
-  const d=document.createElement("div");
-  d.className="matrix-x-lbl"; d.dataset.c=c; d.textContent=`L${c}`;
-  xLabels.appendChild(d);
-});
-
-/* ══ MATRIX MODE ════════════════════════════ */
-function setMode(m){
-  matrixMode=m;
-  document.querySelectorAll(".mode-btn").forEach((b,i)=>{
-    b.classList.toggle("active",["score","heat","clean"][i]===m);
-  });
-  document.querySelectorAll(".cell").forEach(cell=>{
-    const val=cell.querySelector(".cell-val");
-    const coord=cell.querySelector(".cell-coord");
-    const glyph=cell.querySelector(".cell-glyph");
-    if(m==="score"){ val.style.display=""; coord.style.display=""; glyph.style.display=""; }
-    if(m==="heat"){  val.style.display="none"; coord.style.display="none"; glyph.style.display="none"; }
-    if(m==="clean"){ val.style.display="none"; coord.style.display="none"; glyph.style.display="none"; }
-  });
-}
-
-/* ══ CROSSHAIR ══════════════════════════════ */
-function updateCrosshair(){
-  const crossH=document.getElementById("crossH");
-  const crossV=document.getElementById("crossV");
-  if(!likelihood||!impact){ crossH.style.opacity="0"; crossV.style.opacity="0"; return; }
-  const rowIdx=ROWS.indexOf(impact);
-  const colIdx=COLS.indexOf(likelihood);
-  const cellH=`${100/5}%`;
-  crossH.style.top=`calc(${rowIdx}*${cellH} + ${rowIdx}*4px)`;
-  crossH.style.height=cellH;
-  crossH.style.opacity="1";
-  crossV.style.left=`calc(${colIdx}*${cellH} + ${colIdx}*4px)`;
-  crossV.style.width=cellH;
-  crossV.style.opacity="1";
-}
-
-/* ══ RENDER INPUTS ══════════════════════════ */
-function renderInputs(){
-  // likelihood
-  document.querySelectorAll(".like-btn").forEach(b=>{
-    b.classList.toggle("active",+b.dataset.v===likelihood);
-  });
-  const desc=document.getElementById("likeDesc");
-  if(likelihood){ desc.textContent=LIKELIHOOD[likelihood-1].desc; desc.classList.remove("hidden"); }
-  else desc.classList.add("hidden");
-
-  // impact
-  document.querySelectorAll(".impact-btn").forEach(b=>{
-    b.classList.toggle("active",+b.dataset.v===impact);
-  });
-
-  // matrix cells
-  document.querySelectorAll(".cell").forEach(cell=>{
-    const r=+cell.dataset.r, c=+cell.dataset.c;
-    const sel=(c===likelihood&&r===impact);
-    const rowHl=(r===impact), colHl=(c===likelihood);
-    cell.classList.toggle("selected", sel);
-    cell.classList.toggle("highlighted", !sel&&(rowHl||colHl));
-    cell.classList.toggle("dimmed", !!(likelihood&&impact)&&!sel&&!rowHl&&!colHl);
-  });
-
-  // axis labels
-  document.querySelectorAll(".matrix-x-lbl").forEach(d=>d.classList.toggle("active",+d.dataset.c===likelihood));
-  document.querySelectorAll(".matrix-y-lbl").forEach(d=>d.classList.toggle("active",+d.dataset.r===impact));
-
-  updateCrosshair();
-
-  // formula live
-  const s=(likelihood&&impact)?likelihood*impact:0;
-  const hl=s>0?tierFor(s).cls:"";
-  document.getElementById("formulaEq").innerHTML=
-    `<span class="hl">L</span>(${p2(likelihood||0)}) × <span class="hl">I</span>(${p2(impact||0)}) = <span class="eq-result">${p2(s)}</span>`;
-
-  document.getElementById("execBtn").disabled=!(likelihood&&impact)||phase==="arming";
-}
-
-/* ══ SPARKLINE ══════════════════════════════ */
-function updateSparkline(){
-  if(scoreHistory.length<2) return;
-  const svg=document.getElementById("sparklineSvg");
-  const W=260, H=40, pad=4;
-  const max=Math.max(...scoreHistory,1);
-  const pts=scoreHistory.map((v,i)=>{
-    const x=pad+(i/(scoreHistory.length-1))*(W-pad*2);
-    const y=H-pad-(v/max)*(H-pad*2);
-    return `${x},${y}`;
-  });
-  const line=pts.join(" ");
-  const area=[`${pad},${H}`, ...pts, `${W-pad},${H}`].join(" ");
-  document.getElementById("sparklineLine").setAttribute("points",line);
-  document.getElementById("sparklineArea").setAttribute("points",area);
-}
-
-/* ══ LOG ════════════════════════════════════ */
-function appendLog(tag,tone,text){
-  const body=document.getElementById("logBody");
-  const div=document.createElement("div");
-  div.className=`log-line ${tone}`;
-  div.innerHTML=`<span class="log-ts">[${nowTs()}]</span> <span class="log-tag">[${tag}]</span> ${text}`;
-  body.appendChild(div);
-  body.scrollTop=body.scrollHeight;
-}
-
-/* ══ EXECUTE ════════════════════════════════ */
-function clearTimers(){ timers.forEach(clearTimeout); timers=[]; }
-
-document.getElementById("execBtn").onclick=()=>{
-  if(!likelihood||!impact) return;
-  clearTimers();
-  phase="arming";
-  document.getElementById("execLbl").textContent="Computing…";
-  document.getElementById("execBtn").disabled=true;
-  document.getElementById("resetBtn").classList.remove("hidden");
-  document.getElementById("ftPhaseDot").className="ft-dot amber";
-  document.getElementById("ftPhaseLbl").textContent="Computing";
-
-  const s=likelihood*impact;
-  const t=tierFor(s);
-  scoreHistory.push(s);
-  updateSparkline();
-
-  const fakeCVE=`CVE-2024-${Math.floor(10000+Math.random()*89999)}`;
-  const fakeHash=Math.random().toString(16).slice(2,10)+Math.random().toString(16).slice(2,6);
-
-  const stream=[
-    { tag:"SYS",   tone:"tone-sys",   delay:0,   text:"INITIALIZING_RISK_COORDINATES…" },
-    { tag:"DATA",  tone:"tone-data",  delay:260,  text:`MAPPING VECTOR: LIKELIHOOD_${p2(likelihood)} × IMPACT_${p2(impact)}` },
-    { tag:"DATA",  tone:"tone-data",  delay:520,  text:"PROBING CORE INFRASTRUCTURE EXPOSURE SURFACE…" },
-    { tag:"INTEL", tone:"tone-intel", delay:800,  text:`THREAT INTEL LOCKED: ${fakeCVE} [EPSS: ${(Math.random()*0.95).toFixed(3)}]` },
-    { tag:"DATA",  tone:"tone-data",  delay:1060, text:`CVSS BASE SCORE: ${(3.0+Math.random()*7).toFixed(1)} · VECTOR: AV:N/AC:L/PR:N` },
-    { tag:"EVAL",  tone:"tone-eval",  delay:1340, text:`NIST_SP_800-30 CROSS-REFERENCE: TIER ${t.label.toUpperCase()}` },
-    { tag: s>=20?"ALERT":"OK", tone: s>=20?"tone-alert":"tone-ok", delay:1620,
-      text: s>=20 ? "⚠ CRITICAL_VARIANCE_DETECTED — IMMEDIATE ESCALATION REQUIRED" : "CALCULATION COMPLETE. RISK SCORE VALIDATED." },
-    { tag:"SYS",   tone:"tone-sys",   delay:1900, text:`AUDIT_HASH: 0x${fakeHash} · LOGGED TO SIEM` },
+/* ── stats ─────────────────────────────────────── */
+function renderStats() {
+  const F = D.findings, ck = D.checkov;
+  const crit = F.filter(f => f.L * f.I >= 12).length;
+  const scanBefore = (D.scan.before.match(/^\s*\[/gm) || []).length;
+  const items = [
+    [F.length, "findings in the register", null],
+    [F.filter(f => f.rL * f.rI >= 12).length, `high/critical risks after remediation (was ${crit})`, crit],
+    [ck.after.failed, `Checkov failed checks (was ${ck.before.failed})`, ck.before.failed],
+    [(D.scan.after.match(/^\s*\[/gm) || []).length, `scan.py findings (was ${scanBefore})`, scanBefore],
+    [new Set(F.flatMap(f => f.csf.map(c => c.id))).size, "CSF 2.0 subcategories supported", null],
   ];
-
-  document.getElementById("logBody").innerHTML="";
-  document.getElementById("ind1").className="log-ind on";
-  document.getElementById("ind2").className="log-ind";
-  document.getElementById("ind3").className="log-ind";
-
-  stream.forEach((line,i)=>{
-    const timer=setTimeout(()=>{
-      appendLog(line.tag,line.tone,line.text);
-      if(i===2) document.getElementById("ind2").className="log-ind on";
-      if(i===stream.length-1){ document.getElementById("ind3").className="log-ind done"; finalize(s,t); }
-    }, line.delay);
-    timers.push(timer);
+  $("#stats").innerHTML = items.map(([n, l, was]) =>
+    `<div class="stat"><div class="n">${was != null ? `<s>${was}</s>→ ` : ""}<span data-to="${n}">${n}</span></div><div class="l">${esc(l)}</div></div>`).join("");
+  if (!reduce) document.querySelectorAll("[data-to]").forEach(el => {
+    const to = +el.dataset.to; if (!to) return;
+    const t0 = performance.now();
+    (function step(t) { const p = Math.min(1, (t - t0) / 1400); el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); })(t0);
   });
-};
-
-/* ══ FINALIZE ═══════════════════════════════ */
-function finalize(s,t){
-  phase="result";
-  document.getElementById("execLbl").textContent="Execute Calculation";
-  document.getElementById("ftPhaseDot").className="ft-dot gray";
-  document.getElementById("ftPhaseLbl").textContent="Idle";
-
-  // score animate
-  const sv=document.getElementById("scoreVal");
-  sv.className=`score-val mono ${t.cls}`;
-  animateCount(sv,0,s,700);
-
-  // tier pill
-  const pill=document.getElementById("tierPill");
-  pill.className=`tier-pill ${t.cls}`;
-  pill.textContent=t.label;
-
-  // threat meta
-  const meta=document.getElementById("threatMeta");
-  meta.classList.remove("hidden");
-
-  // risk bar
-  const fill=document.getElementById("riskBarFill");
-  fill.className=`risk-bar-fill ${t.cls}`;
-  setTimeout(()=>{ fill.style.width=`${(s/25)*100}%`; },50);
-
-  document.getElementById("resourceText").textContent=
-    s>=20 ? "Projected costs exceed Tier-4 contingency budgets. Executive notification and cyber insurance escalation required within 2 hours." :
-    s>=12 ? "Material remediation budget required. Engage security operations center and initiate incident response playbook." :
-    s>=6  ? "Standard mitigation playbook applies. Assign to security team backlog. Weekly monitoring cadence." :
-            "Within accepted tolerance bands. Log for quarterly risk audit. No immediate action required.";
-
-  const protoBadge=document.getElementById("protoBadge");
-  const code=s>=20?"DEFCON_2_ELEVATION":s>=12?"DEFCON_3_MITIGATION":s>=6?"DEFCON_4_MONITORED":"DEFCON_5_NOMINAL";
-  protoBadge.className=`proto-badge ${t.cls}`;
-  protoBadge.textContent=code;
-
-  document.getElementById("protoText").textContent=
-    s>=20 ? "Immediate isolation of affected network segments. Credential rotation for all privileged operators. Engage CISO and legal." :
-    s>=12 ? "Apply hardening controls, verify backup integrity, confirm logging coverage, notify risk committee." :
-    s>=6  ? "Document findings, schedule remediation sprint, verify access controls on affected surface." :
-            "Log findings. Include in next scheduled security review. No elevated response required.";
-
-  const fsize=Math.floor(s*37.4+120);
-  document.getElementById("auditFileName").textContent=`ATTACHMENT_${String(s*37).padStart(4,"0")}_EVIDENCE.ZIP`;
-  document.getElementById("auditFileSize").textContent=`${fsize}.${Math.floor(Math.random()*9)} KB · AES-256-GCM`;
 }
 
-/* ══ COUNT ANIMATION ════════════════════════ */
-function animateCount(el,from,to,dur){
-  const t0=performance.now();
-  function step(t){
-    const p=Math.min(1,(t-t0)/dur);
-    const e=1-Math.pow(1-p,4);
-    el.textContent=p2(Math.round(from+(to-from)*e));
-    if(p<1) requestAnimationFrame(step);
+/* ── summary ───────────────────────────────────── */
+function renderSummary() {
+  const F = D.findings;
+  const sum = k => F.reduce((a, f) => a + (k === "i" ? f.L * f.I : f.rL * f.rI), 0);
+  const top = F.slice().sort((a, b) => b.L * b.I - a.L * a.I).slice(0, 3).map(f => `${f.id} (${f.title})`);
+  $("#execText").innerHTML =
+    `The assessment identified <b>${F.length} findings</b> across data, identity, network, compute and detection. ` +
+    `The highest inherent risks were ${esc(top.join(", "))}. All ${F.length} have been remediated in Terraform. ` +
+    `Total risk score fell from <b>${sum("i")}</b> to <b>${sum("r")}</b>, and every residual risk is now within tolerance. ` +
+    `Checkov failures dropped from <b>${D.checkov.before.failed}</b> to <b>${D.checkov.after.failed}</b>, and the gates now run in CI so these misconfigurations cannot return unnoticed.`;
+  $("#appetite").innerHTML = `<b>Risk tolerance</b> (<span class="mono">${D.appetite.id}</span>: “${esc(D.appetite.text)}”): residual risk must score below ${TOL} (Low). Anything at ${TOL} or above needs a funded remediation plan or a signed risk acceptance.`;
+  $("#ckv").textContent = D.checkov.version;
+  $("#methodIds").innerHTML = D.method.map(m => `<span class="tag" title="${esc(m.text)}">${m.id}</span>`).join(" ");
+  $("#gen").textContent = D.generated;
+}
+
+/* ── matrix ────────────────────────────────────── */
+let view = "inherent";
+function renderMatrix() {
+  const mx = $("#mx");
+  mx.innerHTML = "";
+  for (let I = 5; I >= 1; I--) for (let L = 1; L <= 5; L++) {
+    const s = L * I, c = document.createElement("div");
+    c.className = `cell ${tier(s).k}${s < TOL ? " tol" : ""}`;
+    c.title = `Likelihood ${LEVELS[L-1]} × Impact ${LEVELS[I-1]} = ${s}`;
+    c.innerHTML = `<span>${s}</span>`;
+    mx.appendChild(c);
   }
-  requestAnimationFrame(step);
+  $("#mxX").innerHTML = LEVELS.map(l => `<div>${l}</div>`).join("");
+  allRisks().forEach(r => {
+    const d = document.createElement("button");
+    d.className = "dot" + (r.custom ? " custom" : "");
+    d.dataset.id = r.id;
+    d.textContent = r.id.replace("F-", "");
+    d.addEventListener("click", () => openRow(r.id));
+    mx.appendChild(d);
+  });
+  placeDots();
+}
+function placeDots() {
+  const groups = {};
+  allRisks().forEach(r => {
+    const L = view === "inherent" ? r.L : r.rL, I = view === "inherent" ? r.I : r.rI;
+    (groups[L + "," + I] ||= []).push(r);
+  });
+  Object.entries(groups).forEach(([k, rs]) => {
+    const [L, I] = k.split(",").map(Number);
+    rs.forEach((r, i) => {
+      const d = $(`.dot[data-id="${CSS.escape(r.id)}"]`);
+      const n = rs.length, ang = (i / n) * 2 * Math.PI - Math.PI / 2, rad = n > 1 ? 4.6 : 0;
+      d.style.left = `calc(${(L - .5) * 20}% + ${Math.cos(ang) * rad}%)`;
+      d.style.top = `calc(${(5 - I + .5) * 20}% + ${Math.sin(ang) * rad}%)`;
+      d.title = `${r.id} ${r.title} — ${view}: ${LEVELS[L-1]} × ${LEVELS[I-1]} = ${L * I}`;
+      d.setAttribute("aria-label", d.title);
+    });
+  });
+}
+function setView(v) {
+  view = v;
+  document.querySelectorAll("#seg button").forEach(b => { const on = b.dataset.v === v; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  moveKnob(); placeDots();
+}
+function moveKnob() {
+  const b = $("#seg button.on"), k = $("#knob");
+  k.style.left = b.offsetLeft + "px"; k.style.width = b.offsetWidth + "px";
 }
 
-/* ══ RESET ══════════════════════════════════ */
-document.getElementById("resetBtn").onclick=()=>{
-  clearTimers();
-  likelihood=null; impact=null; phase="idle";
-  document.getElementById("logBody").innerHTML=`<div class="log-empty">Awaiting parameters — execute calculation to stream evidence</div>`;
-  document.getElementById("scoreVal").textContent="00";
-  document.getElementById("scoreVal").className="score-val mono";
-  document.getElementById("tierPill").className="tier-pill hidden";
-  document.getElementById("threatMeta").classList.add("hidden");
-  document.getElementById("riskBarFill").style.width="0";
-  document.getElementById("resetBtn").classList.add("hidden");
-  document.getElementById("ind1").className="log-ind";
-  document.getElementById("ind2").className="log-ind";
-  document.getElementById("ind3").className="log-ind";
-  document.getElementById("formulaEq").innerHTML=
-    `<span class="hl">L</span>(00) × <span class="hl">I</span>(00) = <span class="eq-result">00</span>`;
-  updateCrosshair();
-  renderInputs();
-};
+/* ── register ──────────────────────────────────── */
+function detailHtml(f) {
+  if (f.custom) return `<div class="det"><p>Assessor-added risk. Inherent ${LEVELS[f.L-1]} likelihood × ${LEVELS[f.I-1]} impact. Status: open, residual not yet assessed.</p>
+    <p><button class="rm" data-rm="${esc(f.id)}">Remove this risk</button></p></div>`;
+  const code = f.code.map(c => `<div class="code2">
+      ${c.before ? `<div><div class="ph b">● BEFORE · ${esc(c.before_file)}</div><pre>${esc(c.before)}</pre></div>` : ""}
+      <div${c.before ? "" : ' style="grid-column:1/-1"'}><div class="ph a">● AFTER · ${esc(c.after_file)}</div><pre>${esc(c.after)}</pre></div>
+    </div>`).join("");
+  return `<div class="det">
+    <div class="kv">
+      <div><h4>Asset</h4><p>${esc(f.asset)}</p></div>
+      <div><h4>Threat</h4><p>${esc(f.threat)}</p></div>
+      <div><h4>Vulnerability</h4><p>${esc(f.vuln)}</p></div>
+    </div>
+    <div class="kv">
+      <div><h4>Inherent: ${LEVELS[f.L-1]} × ${LEVELS[f.I-1]}</h4><ul><li><b>Likelihood:</b> ${esc(f.L_why)}</li><li><b>Impact:</b> ${esc(f.I_why)}</li></ul></div>
+      <div><h4>Residual: ${LEVELS[f.rL-1]} × ${LEVELS[f.rI-1]}</h4><p>${esc(f.rL_why)}</p></div>
+    </div>
+    <div><h4>Remediation</h4><p>${esc(f.fix)}</p></div>
+    ${code ? `<div style="display:grid;gap:12px">${code}</div>` : ""}
+    <div class="kv">
+      <div><h4>NIST CSF 2.0</h4>${f.csf.map(c => `<div class="ctl"><span class="tag">${c.id}</span><span>${esc(c.text)}</span></div>`).join("")}</div>
+      <div><h4>NIST SP 800-53 Rev. 5</h4>${f.sp.map(c => `<div class="ctl"><span class="tag">${esc(c.id)}</span><span>${esc(c.title)}</span></div>`).join("")}</div>
+    </div>
+    <div class="kv">
+      <div><h4>Checkov failures resolved (${f.checkov_before.length})</h4>${f.checkov_before.map(c => `<div class="ctl"><span class="tag">${c.id}</span><span>${esc(c.name)}</span></div>`).join("")}</div>
+      <div><h4>scan.py findings resolved (${f.scan_before.length})</h4>${f.scan_before.map(s => `<div class="ctl"><span class="tag">${s.severity}</span><span>${esc(s.message)} <span class="mono" style="color:var(--dim)">${esc(s.resource)}</span></span></div>`).join("")}</div>
+    </div>
+  </div>`;
+}
+function renderRegister() {
+  $("#regBody").innerHTML = allRisks().map(f => `
+    <tr class="row" data-id="${esc(f.id)}" tabindex="0" aria-expanded="false">
+      <td><span class="chev">▸</span></td><td class="mono">${esc(f.id)}</td><td>${esc(f.title)}</td><td>${esc(f.layer)}</td>
+      <td>${pill(f.L, f.I)}</td><td>${f.custom ? '<span class="tag">Not assessed</span>' : pill(f.rL, f.rI)}</td>
+      <td>${esc(f.owner || "—")}</td><td><span class="tag">${esc(f.status)}</span></td>
+    </tr>
+    <tr><td colspan="8" class="detail"><div class="collapse"><div>${detailHtml(f)}</div></div></td></tr>`).join("");
+}
+function toggleRow(tr, force) {
+  const open = force ?? !tr.classList.contains("open");
+  tr.classList.toggle("open", open);
+  tr.setAttribute("aria-expanded", open);
+}
+function openRow(id) {
+  const tr = $(`#regBody tr.row[data-id="${CSS.escape(id)}"]`);
+  toggleRow(tr, true);
+  tr.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+$("#regBody").addEventListener("click", e => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm) { custom = custom.filter(c => c.id !== rm.dataset.rm); saveCustom(); refresh(); toast("Risk removed"); return; }
+  const tr = e.target.closest("tr.row"); if (tr) toggleRow(tr);
+});
+$("#regBody").addEventListener("keydown", e => {
+  const tr = e.target.closest("tr.row");
+  if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleRow(tr); }
+});
 
-/* ══ INIT ═══════════════════════════════════ */
-renderInputs();
+/* ── controls ──────────────────────────────────── */
+function renderControls() {
+  const FN = { GV: "Govern", ID: "Identify", PR: "Protect", DE: "Detect", RS: "Respond", RC: "Recover" };
+  const map = {};
+  D.findings.forEach(f => f.csf.forEach(c => { (map[c.id] ||= { text: c.text, f: [] }).f.push(f.id); }));
+  map[D.appetite.id] = { text: D.appetite.text, f: ["Tolerance"] };
+  D.method.forEach(m => { map[m.id] = { text: m.text, f: ["Register"] }; });
+  const by = {};
+  Object.keys(map).sort().forEach(id => (by[id.slice(0, 2)] ||= []).push(id));
+  $("#ctlList").innerHTML = Object.keys(FN).filter(k => by[k]).map(k => `<div class="fn"><h3><span class="tag">${k}</span>${FN[k]}</h3>
+    ${by[k].map(id => `<div class="sc"><span class="mono">${id}</span><span>${esc(map[id].text)}</span><span class="fs">${map[id].f.map(x => `<span class="tag">${esc(x)}</span>`).join("")}</span></div>`).join("")}</div>`).join("");
+}
+
+/* ── evidence ──────────────────────────────────── */
+function renderEvidence() {
+  $("#scanBefore").textContent = D.scan.before;
+  $("#scanAfter").textContent = D.scan.after;
+  const row = (lbl, s) => {
+    const tot = s.passed + s.failed + s.skipped;
+    return `<div class="row2"><span>${lbl}</span><div class="track" title="${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped">
+      <i class="p" data-w="${s.passed / tot * 100}"></i><i class="k" data-w="${s.skipped / tot * 100}"></i><i class="f" data-w="${s.failed / tot * 100}"></i></div>
+      <span class="mono" style="color:${s.failed ? "var(--red)" : "var(--green)"}">${s.failed} ✗</span></div>`;
+  };
+  const b = D.checkov.before, a = D.checkov.after;
+  $("#ckCmp").innerHTML = `<h4 class="eyebrow">Checkov ${esc(D.checkov.version)}</h4>
+    ${row("Before", b)}${row("After", a)}
+    <div style="font-size:13px;color:var(--dim)">Before: ${b.passed} passed / ${b.failed} failed across ${b.resource_count} resources. After: ${a.passed} passed / ${a.failed} failed / ${a.skipped} skipped across ${a.resource_count} resources. <span style="color:var(--green)">■</span> passed <span style="color:var(--amber)">■</span> skipped <span style="color:var(--red)">■</span> failed</div>`;
+  $("#accBody").innerHTML = D.accepted.map(x => `<tr><td><span class="tag">${x.id}</span><div style="font-size:12.5px;color:var(--dim);margin-top:4px">${esc(x.name)}</div></td><td class="mono" style="font-size:12.5px">${esc(x.resource)}</td><td>${esc(x.why)}</td></tr>`).join("");
+}
+
+/* ── add risk ──────────────────────────────────── */
+function initForm() {
+  ["#fL", "#fI"].forEach(s => { $(s).innerHTML = LEVELS.map((l, i) => `<option value="${i + 1}"${i === 2 ? " selected" : ""}>${i + 1} · ${l}</option>`).join(""); });
+  const form = $("#addForm");
+  const pv = () => {
+    const s = form.L.value * form.I.value, t = tier(s);
+    $("#pvScore").textContent = s; $("#pvScore").style.color = `var(--t-${t.k})`;
+    $("#pvPill").innerHTML = `<span class="pill ${t.k}">${t.label}</span> ${s >= TOL ? '<span class="tag">Above tolerance</span>' : '<span class="tag">Within tolerance</span>'}`;
+  };
+  form.addEventListener("change", pv); pv();
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const title = form.title.value.trim(); if (!title) return;
+    const n = custom.reduce((m, c) => Math.max(m, +c.id.slice(2)), 0) + 1;
+    custom.push({ id: "C-" + String(n).padStart(2, "0"), custom: true, title, layer: form.layer.value,
+      L: +form.L.value, I: +form.I.value, owner: form.owner.value.trim(), status: "Open" });
+    saveCustom(); form.reset(); pv(); refresh();
+    toast("Added to the register");
+    openRow(custom[custom.length - 1].id);
+  });
+}
+
+/* ── exports ───────────────────────────────────── */
+function download(name, type, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function csvCell(v) { v = String(v ?? ""); if (/^[=+\-@]/.test(v)) v = "'" + v; return `"${v.replace(/"/g, '""')}"`; }
+$("#exportCsv").addEventListener("click", () => {
+  const head = ["ID","Finding","Layer","Asset","Threat","Vulnerability","Inherent L","Inherent I","Inherent score","Inherent tier","Residual L","Residual I","Residual score","Residual tier","Owner","Status","Remediation","CSF 2.0","SP 800-53"];
+  const rows = allRisks().map(f => [f.id, f.title, f.layer, f.asset, f.threat, f.vuln,
+    LEVELS[f.L-1], LEVELS[f.I-1], f.L * f.I, tier(f.L * f.I).label,
+    f.custom ? "" : LEVELS[f.rL-1], f.custom ? "" : LEVELS[f.rI-1], f.custom ? "" : f.rL * f.rI, f.custom ? "" : tier(f.rL * f.rI).label,
+    f.owner, f.status, f.fix, (f.csf || []).map(c => c.id).join("; "), (f.sp || []).map(c => c.id).join("; ")]);
+  download("risk-register.csv", "text/csv", "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n"));
+});
+$("#exportJson").addEventListener("click", () => download("risk-assessment.json", "application/json", JSON.stringify({ ...D, custom }, null, 2)));
+$("#exportPdf").addEventListener("click", () => {
+  document.querySelectorAll("#regBody tr.row").forEach(tr => toggleRow(tr, true));
+  document.querySelectorAll(".reveal").forEach(el => el.classList.add("in"));
+  setView("residual");
+  toast("Choose “Save as PDF” in the print dialog");
+  setTimeout(() => window.print(), 400);
+});
+
+/* ── motion & chrome ───────────────────────────── */
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2600); }
+function initReveal() {
+  const bars = () => document.querySelectorAll(".track i").forEach(i => { i.style.width = i.dataset.w + "%"; });
+  if (reduce || !("IntersectionObserver" in window)) { document.querySelectorAll(".reveal").forEach(el => el.classList.add("in")); bars(); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in"); io.unobserve(e.target);
+    if (e.target.id === "evidence") setTimeout(bars, 300);
+    if (e.target.id === "matrix" && view === "inherent") setTimeout(() => setView("residual"), 1800);
+  }), { threshold: .15 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+  const links = [...document.querySelectorAll(".navlinks a")];
+  const spy = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  document.querySelectorAll("main section").forEach(s => spy.observe(s));
+}
+addEventListener("scroll", () => $("#nav").classList.toggle("scrolled", scrollY > 10), { passive: true });
+addEventListener("resize", moveKnob);
+document.querySelectorAll("#seg button").forEach(b => b.addEventListener("click", () => setView(b.dataset.v)));
+addEventListener("afterprint", () => setView("inherent"));
+
+function refresh() { renderMatrix(); renderRegister(); }
+renderStats(); renderSummary(); refresh(); renderControls(); renderEvidence(); initForm(); initReveal();
+requestAnimationFrame(moveKnob);
 </script>
 </body>
 </html>
