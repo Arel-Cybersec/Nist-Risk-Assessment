@@ -10,6 +10,8 @@ base := {
 	"aws_cloudtrail": {"t": {"enable_log_file_validation": true}},
 	"aws_guardduty_detector": {"g": {"enable": true}},
 	"aws_config_configuration_recorder": {"r": {"name": "r"}},
+	"aws_backup_plan": {"p": {"name": "p"}},
+	"aws_backup_restore_testing_plan": {"t": {"name": "t"}},
 }
 
 test_clean_baseline_passes if {
@@ -65,4 +67,24 @@ test_missing_detection_denied if {
 	"F-07 no enabled aws_guardduty_detector" in msgs
 	"F-07 no aws_config_configuration_recorder (configuration drift is not monitored)" in msgs
 	"F-04 no aws_cloudtrail with enable_log_file_validation = true" in msgs
+}
+
+test_backup_without_restore_testing_denied if {
+	r := object.remove(base, ["aws_backup_restore_testing_plan"])
+	"F-11 backups are never test-restored (no aws_backup_restore_testing_plan)" in deny with input as wrap(r)
+}
+
+test_weak_tls_listener_denied if {
+	r := object.union(base, {"aws_lb_listener": {"l": {"protocol": "HTTPS", "ssl_policy": "ELBSecurityPolicy-2016-08"}}})
+	"F-13 aws_lb_listener.l: TLS below 1.2 allowed" in deny with input as wrap(r)
+}
+
+test_http_redirect_listener_allowed if {
+	r := object.union(base, {"aws_lb_listener": {"l": {"protocol": "HTTP", "default_action": {"type": "redirect"}}}})
+	count(deny) == 0 with input as wrap(r)
+}
+
+test_tls13_listener_allowed if {
+	r := object.union(base, {"aws_lb_listener": {"l": {"protocol": "HTTPS", "ssl_policy": "ELBSecurityPolicy-TLS13-1-3-2021-06"}}})
+	count(deny) == 0 with input as wrap(r)
 }
