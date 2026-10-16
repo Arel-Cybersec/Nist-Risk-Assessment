@@ -1,0 +1,11 @@
+# F-09: keep third-party components patched (PR.PS-02, GV.SC-07)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directories: ["/", "/org"]
+    schedule:
+      interval: weekly

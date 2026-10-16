@@ -4,6 +4,18 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "use_localstack" {
+  description = "true: target LocalStack on localhost. false: deploy to the AWS account in the current credentials."
+  type        = bool
+  default     = true
+}
+
+variable "alert_email" {
+  description = "Optional address subscribed to security alerts (GuardDuty, Config, drift). Must confirm the SNS email."
+  type        = string
+  default     = ""
+}
+
 variable "localstack_endpoint" {
   description = "LocalStack edge endpoint."
   type        = string

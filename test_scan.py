@@ -17,7 +17,8 @@ def scan_text(tf):
 class ScanTest(unittest.TestCase):
     def test_vulnerable_baseline_flags_every_finding(self):
         ids = {f["id"] for f in scan.scan(ROOT / "vulnerable")}
-        self.assertEqual(ids, {"F-01", "F-02", "F-03", "F-04", "F-05", "F-06"})
+        # F-08 needs a human-assumable role, which the baseline does not have (it uses an IAM user)
+        self.assertEqual(ids, {"F-01", "F-02", "F-03", "F-04", "F-05", "F-06", "F-07", "F-09"})
         self.assertEqual(scan.main([str(ROOT / "vulnerable")]), 1)
 
     def test_hardened_root_is_clean(self):
@@ -84,6 +85,23 @@ resource "aws_security_group_rule" "egress_ok" {
             Path(d, "t.tf").write_text(tf)
             flagged = sorted(f["resource"] for f in scan.scan(d) if f["id"] == "F-05")
         self.assertEqual(flagged, ["aws_security_group_rule.ssh", "aws_vpc_security_group_ingress_rule.rdp"])
+
+    def test_human_role_needs_permissions_boundary(self):
+        trust = 'assume_role_policy = jsonencode({ Statement = [{ Principal = { AWS = "arn:aws:iam::1:root" } }] })'
+        hits = scan_text(f'resource "aws_iam_role" "dev" {{\n  {trust}\n}}')
+        self.assertIn(("F-08", "HIGH", "Human-assumable role without a permissions boundary"), hits)
+        bounded = f'resource "aws_iam_role" "dev" {{\n  {trust}\n  permissions_boundary = aws_iam_policy.b.arn\n}}'
+        self.assertNotIn("F-08", {h[0] for h in scan_text(bounded)})
+        service = 'resource "aws_iam_role" "svc" {\n  assume_role_policy = jsonencode({ Statement = [{ Principal = { Service = "ec2.amazonaws.com" } }] })\n}'
+        self.assertNotIn("F-08", {h[0] for h in scan_text(service)})
+
+    def test_missing_detection_and_lock_file_are_flagged(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "t.tf").write_text('resource "aws_vpc" "v" {\n  cidr_block = "10.0.0.0/16"\n}\n')
+            missing = {(f["id"], f["message"]) for f in scan.scan(d) if f["resource"] == "(project)"}
+        self.assertIn(("F-07", "No enabled GuardDuty detector (no runtime threat detection)"), missing)
+        self.assertIn(("F-07", "No AWS Config recorder (configuration drift is not monitored)"), missing)
+        self.assertIn(("F-09", "No .terraform.lock.hcl (provider checksums are not pinned)"), missing)
 
     def test_commented_out_code_is_ignored(self):
         self.assertEqual(scan_text('# resource "aws_iam_user" "u" { name = "x" }\n'), set())

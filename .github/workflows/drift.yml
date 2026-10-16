@@ -1,0 +1,100 @@
+# Daily drift detection (F-07): compares the live AWS account with the Terraform code and
+# opens an issue when someone has changed infrastructure outside Terraform.
+#
+# Off until a real deployment exists. To enable, set repository variables:
+#   AWS_ROLE_ARN     IAM role trusted for GitHub OIDC (ReadOnlyAccess + read on the state bucket)
+#   TF_STATE_BUCKET  S3 bucket holding the Terraform state of the real deployment
+#   TF_STATE_KEY     optional, default "nist-risk-assessment/terraform.tfstate"
+#   AWS_REGION       optional, default "us-east-1"
+name: drift
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    env:
+      ROLE: ${{ vars.AWS_ROLE_ARN }}
+      BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      KEY: ${{ vars.TF_STATE_KEY || 'nist-risk-assessment/terraform.tfstate' }}
+      REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$ROLE" ] || [ -z "$BUCKET" ]; then
+            echo "::notice::Drift detection is off. Set repository variables AWS_ROLE_ARN and TF_STATE_BUCKET to enable it."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - if: steps.cfg.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.REGION }}
+
+      - if: steps.cfg.outputs.enabled == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Point Terraform at the real deployment's state
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          cat > backend_override.tf <<HCL
+          terraform {
+            backend "s3" {
+              bucket  = "$BUCKET"
+              key     = "$KEY"
+              region  = "$REGION"
+              encrypt = true
+            }
+          }
+          HCL
+          terraform init -input=false
+
+      - name: Detect drift
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -lock=false -input=false -no-color \
+            -var use_localstack=false -var region="$REGION" > plan.txt 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then echo "No drift."; exit 0; fi
+          if [ "$code" -ne 2 ]; then echo "::error::terraform plan failed (exit $code)"; tail -n 40 plan.txt; exit 1; fi
+
+          # Only resource addresses and the summary are published, never the full plan.
+          changed=$(grep -E '^  # ' plan.txt | sed 's/^  # /- /')
+          summary=$(grep -E '^Plan: ' plan.txt || true)
+          printf '%s\n\n%s\n\n%s\n\nRun: %s\n' \
+            "Live infrastructure no longer matches the Terraform code (NIST CSF DE.CM-09, PR.PS-01)." \
+            "$changed" "$summary" "$RUN_URL" > body.md
+          cat body.md
+
+          title="Infrastructure drift detected"
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[].number' | head -n 1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "$title" --body-file body.md
+          fi
+          echo "::error::Drift detected: $summary"
+          exit 1

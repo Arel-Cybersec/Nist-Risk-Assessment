@@ -44,5 +44,8 @@ terraform.rc
 # planout
 .antigravity/
 
+# Terraform lock file is committed, except in the intentionally unpinned baseline
+vulnerable/.terraform.lock.hcl
+
 # Python
 __pycache__/

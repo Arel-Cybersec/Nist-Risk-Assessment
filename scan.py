@@ -1,4 +1,4 @@
-"""Policy-as-code scanner for the risk register findings F-01 … F-06.
+"""Policy-as-code scanner for the risk register findings F-01 … F-09.
 
 Checks the *.tf files in each given directory (not recursive) and exits 1 if any
 CRITICAL or HIGH finding is present, so it can gate a CI pipeline.
@@ -218,12 +218,25 @@ def scan(directory):
             if attr(meta, "http_tokens") != "required":
                 add("F-06", "HIGH", r, "IMDSv1 allowed; set metadata_options.http_tokens = \"required\"")
 
-    # F-04 Project-level: no audit trail at all
+        # F-08 Preventive guardrails: roles people can assume need a permissions boundary
+        if t == "aws_iam_role" and re.search(r"Principal\s*=\s*\{\s*AWS", b) \
+                and not re.search(r"\bpermissions_boundary\s*=", b):
+            add("F-08", "HIGH", r, "Human-assumable role without a permissions boundary")
+
+    # Project-level: controls that are missing entirely
+    def missing(fid, sev, msg):
+        findings.append({"id": fid, "severity": sev, "file": str(Path(directory)), "line": 0,
+                         "resource": "(project)", "message": msg})
+
     if resources:
-        trails = [r for r in by_type.get("aws_cloudtrail", []) if attr(r["body"], "enable_log_file_validation") == "true"]
-        if not trails:
-            findings.append({"id": "F-04", "severity": "HIGH", "file": str(Path(directory)), "line": 0,
-                             "resource": "(project)", "message": "No CloudTrail with log file validation enabled"})
+        if not any(attr(r["body"], "enable_log_file_validation") == "true" for r in by_type.get("aws_cloudtrail", [])):
+            missing("F-04", "HIGH", "No CloudTrail with log file validation enabled")
+        if not any(attr(r["body"], "enable") == "true" for r in by_type.get("aws_guardduty_detector", [])):
+            missing("F-07", "HIGH", "No enabled GuardDuty detector (no runtime threat detection)")
+        if not by_type.get("aws_config_configuration_recorder"):
+            missing("F-07", "HIGH", "No AWS Config recorder (configuration drift is not monitored)")
+        if not (Path(directory) / ".terraform.lock.hcl").is_file():
+            missing("F-09", "MEDIUM", "No .terraform.lock.hcl (provider checksums are not pinned)")
 
     findings.sort(key=lambda f: (SEVERITY_ORDER.index(f["severity"]), f["id"], f["file"], f["line"]))
     return findings

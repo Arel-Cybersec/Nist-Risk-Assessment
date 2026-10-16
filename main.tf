@@ -90,6 +90,15 @@ resource "aws_instance" "app_server" {
   }
 }
 
+# Incident response (F-10, Playbook B): an empty security group, ready before it is needed,
+# that cuts a compromised instance off from all traffic in one command.
+resource "aws_security_group" "isolation" {
+  #checkov:skip=CKV2_AWS_5:Attached only during an incident (governance/incident-response.md, Playbook B)
+  name        = "isolation-sg"
+  description = "Incident response: no inbound or outbound traffic"
+  vpc_id      = aws_vpc.fintech_vpc.id
+}
+
 # Stable public address for HTTPS clients and outbound SSM/AWS API traffic.
 # Production would front this with a load balancer and keep the instance private.
 resource "aws_eip" "app" {
