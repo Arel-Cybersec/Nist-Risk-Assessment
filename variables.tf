@@ -4,6 +4,40 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "dr_region" {
+  description = "Second region holding replicated data and backup copies (F-12). Must differ from region."
+  type        = string
+  default     = "us-west-2"
+
+  validation {
+    condition     = var.dr_region != var.region
+    error_message = "dr_region must be different from region."
+  }
+}
+
+variable "domain_name" {
+  description = "Public hostname for the application (F-13), e.g. app.example.com. Empty: no certificate or HTTPS listener is created."
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_id" {
+  description = "Route 53 hosted zone that owns domain_name; used for DNS validation of the ACM certificate."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.domain_name == "" || var.route53_zone_id != ""
+    error_message = "route53_zone_id is required when domain_name is set."
+  }
+}
+
+variable "deletion_protection" {
+  description = "Protect the load balancer from deletion. Set false before terraform destroy."
+  type        = bool
+  default     = true
+}
+
 variable "use_localstack" {
   description = "true: target LocalStack on localhost. false: deploy to the AWS account in the current credentials."
   type        = bool

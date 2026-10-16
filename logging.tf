@@ -80,7 +80,7 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["${aws_s3_bucket.fintech_storage.arn}/"]
+      values = ["${aws_s3_bucket.fintech_storage.arn}/", "${aws_s3_bucket.replica.arn}/"]
     }
   }
 
