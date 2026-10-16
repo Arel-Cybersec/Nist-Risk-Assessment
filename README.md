@@ -3,7 +3,7 @@
 [![security](https://github.com/Arel-Cybersec/Nist-Risk-Assessment/actions/workflows/security.yml/badge.svg)](https://github.com/Arel-Cybersec/Nist-Risk-Assessment/actions/workflows/security.yml)
 
 ## Project Overview
-This project bridges the gap between Governance, Risk, and Compliance (GRC) frameworks and hands-on technical execution. It runs a full DevSecOps lifecycle: a **NIST Cybersecurity Framework (CSF) 2.0** risk assessment of a deliberately misconfigured AWS environment, the infrastructure-as-code (IaC) that remediates it, and automated scans in CI that prove the fixes hold.
+This project bridges the gap between Governance, Risk, and Compliance (GRC) frameworks and hands-on technical execution. It runs a full DevSecOps lifecycle: a **NIST Cybersecurity Framework (CSF) 2.0** risk assessment of a deliberately misconfigured AWS environment, the infrastructure-as-code (IaC) that remediates it, automated gates in CI that block unsafe changes, runtime monitoring for the live account, and the governance artefacts (supply chain, incident response) that CSF 2.0 expects alongside the technical controls.
 
 **Report:** open [`index.html`](index.html) for the interactive risk assessment report. It covers the risk register, the inherent → residual risk matrix, before/after Terraform, control mapping and scan evidence, and exports to CSV, JSON or PDF.
 
@@ -13,9 +13,12 @@ Risks are scored on a **5×5 likelihood × impact matrix** using the five qualit
 ### Technical Skills Demonstrated
 * **Governance, Risk, and Compliance (GRC):** Risk identification, scoring, treatment and tracking aligned to NIST CSF 2.0 (`ID.RA-01`, `ID.RA-05`, `ID.RA-06`) with a stated risk tolerance (`GV.RM-02`).
 * **Infrastructure as Code (IaC):** AWS data, identity, network, compute and logging layers in Terraform.
-* **Policy as Code:** A dependency-free Python scanner (`scan.py`) for the register's findings, with unit tests, alongside [Checkov](https://github.com/bridgecrewio/checkov).
+* **Policy as Code:** OPA/Rego policies run by [conftest](https://github.com/open-policy-agent/conftest), a dependency-free Python scanner (`scan.py`) and [Checkov](https://github.com/bridgecrewio/checkov), each with tests.
+* **Runtime monitoring:** GuardDuty, 18 AWS Config managed rules, EventBridge alerts and a daily drift check against the live account.
+* **Organization guardrails:** Service Control Policies and a permissions boundary that cap what any principal can do.
+* **Supply chain and response:** pinned and checksum-verified dependencies, Dependabot, a supplier register, an incident response playbook.
 * **Defensive Hardening:** Least privilege, encryption with customer-managed keys, zero exposed management ports and centralised audit logging.
-* **CI/CD security gates:** GitHub Actions blocks any change that reintroduces a finding.
+* **CI/CD security gates:** three independent gates fail the build on any change that reintroduces a finding.
 
 ---
 
@@ -29,8 +32,12 @@ Risks are scored on a **5×5 likelihood × impact matrix** using the five qualit
 | F-04 | No audit trail or network monitoring | Detection | 16 High | 4 Low | PR.PS-04, DE.CM-01, DE.CM-03, DE.CM-09 |
 | F-05 | SSH exposed to the internet; plaintext HTTP | Network | 20 Critical | 4 Low | PR.IR-01, PR.DS-02, DE.CM-01 |
 | F-06 | Instance metadata (IMDSv1) and host hardening | Compute | 12 High | 4 Low | PR.PS-01, PR.AA-05 |
+| F-07 | No runtime threat detection or drift monitoring | Detection | 16 High | 4 Low | DE.CM-09, DE.AE-02, DE.AE-06, PR.PS-01 |
+| F-08 | No preventive guardrails or enforced policy gate | Governance | 15 High | 4 Low | PR.AA-05, GV.PO-01, PR.PS-06 |
+| F-09 | Unmanaged software supply chain | Governance | 12 High | 3 Low | GV.SC-04, GV.SC-07, GV.SC-10, PR.PS-02 |
+| F-10 | No incident response plan | Response | 12 High | **6 Moderate (open)** | RS.MA-02, RS.MI-01, RS.AN-07, RC.RP-03, ID.IM-04 |
 
-Risk tolerance: residual risk must score below 6 (Low). The report records the scoring rationale, SP 800-53 controls and evidence for each finding.
+Risk tolerance: residual risk must score below 6 (Low). **F-10 is still above tolerance**: the playbook exists but has not been exercised, so it stays open until a tabletop exercise has tested it. The report records the scoring rationale, SP 800-53 controls and evidence for each finding.
 
 ## The DevSecOps Lifecycle Execution
 
@@ -39,23 +46,30 @@ Risk tolerance: residual risk must score below 6 (Low). The report records the s
 1. **Data (`s3.tf`):** Public access blocks disabled, a wildcard principal, and no encryption, versioning or logging.
 2. **Identity (`iam.tf`):** `"Action": "*"`, `"Resource": "*"` granted to a developer group through a long-lived IAM user.
 3. **Network & compute (`main.tf`):** SSH (22) and HTTP (80) open to `0.0.0.0/0`, IMDSv1, an unencrypted root volume, and no CloudTrail or flow logs.
+4. **Operations:** no runtime detection (GuardDuty, Config), no provider lock file and no incident response plan.
 
 ### Phase 2: Automated Compliance Auditing
 ```sh
-python3 scan.py vulnerable   # 15 findings (7 CRITICAL, 4 HIGH, 4 MEDIUM), exit 1
+python3 scan.py vulnerable   # 18 findings (7 CRITICAL, 6 HIGH, 5 MEDIUM), exit 1
 python3 scan.py .            # 0 findings, exit 0
 python3 scan.py . --json     # machine-readable output
 python3 -m unittest -v       # scanner tests
+
+conftest verify -p policy                               # 10 Rego unit tests
+conftest test --parser hcl2 --combine *.tf              # OPA gate: 15 rules, 0 failures
+(cd vulnerable && conftest test --parser hcl2 --combine -p ../policy *.tf)   # 15 failures, exit 1
+
 checkov -d . --framework terraform --skip-path vulnerable
 ```
 `scan.py` reads Terraform block by block (resources, ingress rules, policy statements), so it doesn't flag `Deny` statements, public HTTPS or `Resource = "*"` on actions that can't be scoped. It also catches controls that are missing entirely, such as no CloudTrail. It exits non-zero on any HIGH or CRITICAL finding.
 
 | Tool | Vulnerable baseline | Hardened |
 |------|---------------------|----------|
-| `scan.py` | 15 findings | 0 |
-| Checkov 3.3.29 | 14 passed / **33 failed** | 123 passed / **0 failed** / 6 skipped* |
+| `scan.py` | 18 findings | 0 |
+| OPA / conftest 0.56.0 | **15 failures**, 1 warning | 15 passed / **0 failures** |
+| Checkov 3.3.29 | 14 passed / **33 failed** | 145 passed / **0 failed** / 8 skipped* |
 
-\* Each skip has a justification in source (`#checkov:skip=…`), e.g. cross-region replication is out of scope, and the log bucket can't log to itself.
+\* Each skip has a justification in source (`#checkov:skip=…`), e.g. cross-region replication is out of scope, and the log bucket can't log to itself. Checkov only checks resources that exist, so it cannot see a control that is missing entirely (no GuardDuty, no lock file); `scan.py` and the OPA policies cover those.
 
 ### Phase 3: Technical Remediation & Mitigation
 * **Storage protection:** All four Public Access Blocks enabled, ACLs disabled, SSE-KMS with a rotated customer-managed key, versioning and lifecycle rules, access logging, and a bucket policy limited to the application role that denies non-TLS requests.
@@ -63,24 +77,40 @@ checkov -d . --framework terraform --skip-path vulnerable
 * **Network segmentation:** No management ports. Admin access uses SSM Session Manager. Inbound and outbound traffic is HTTPS only, the default security group is locked down and public IPs are not auto-assigned.
 * **Instance hardening:** IMDSv2 is required (hop limit 1), the root volume is encrypted, and the instance has a least-privilege role and detailed monitoring.
 * **Detection:** A multi-region CloudTrail with log file validation, KMS encryption, CloudWatch delivery and S3 object-level events, plus VPC flow logs with 365-day retention.
+* **Runtime monitoring and drift (`detect.tf`, `.github/workflows/drift.yml`):** GuardDuty with S3 and EBS malware protection; an AWS Config recorder with 18 managed rules that mirror this register (identifiers taken from AWS's [NIST conformance packs](https://github.com/awslabs/aws-config-rules/tree/master/aws-config-conformance-packs)); EventBridge alerts for GuardDuty findings, Config non-compliance and attempts to disable CloudTrail, GuardDuty or Config; and a daily `terraform plan` against the live account that opens an issue on drift.
+* **Preventive guardrails (`org/`, `policy/`):** SCPs that stop anyone in member accounts from disabling security tooling, using the root user, leaving the organization or using unapproved regions; org-wide GuardDuty delegated to a security account; a permissions boundary on the developer role; and an OPA policy gate in CI.
+* **Supply chain (`governance/supply-chain.md`):** provider checksums for every platform in `.terraform.lock.hcl` (enforced with `-lockfile=readonly`), every GitHub Action pinned to a commit SHA, conftest verified against its published checksum, Dependabot, and a supplier register with criticality and exit plans.
+* **Incident response (`governance/incident-response.md`, `SECURITY.md`):** roles, severity levels, and playbooks for each alert this environment raises, plus a pre-built isolation security group.
 
 ## Running it
-The Terraform targets [LocalStack](https://github.com/localstack/localstack) on `localhost:4566`; no AWS account is needed. Credentials come from variables (`TF_VAR_localstack_access_key` / `TF_VAR_localstack_secret_key`), which LocalStack accepts with any value.
+By default the Terraform targets [LocalStack](https://github.com/localstack/localstack) on `localhost:4566`; no AWS account is needed. Credentials come from variables (`TF_VAR_localstack_access_key` / `TF_VAR_localstack_secret_key`), which LocalStack accepts with any value. GuardDuty, AWS Config and Organizations are not in LocalStack's free edition, so those resources only fully work against real AWS.
 ```sh
 terraform init && terraform validate && terraform plan
 ```
 
+**Real AWS (sandbox account recommended):** this creates billable resources.
+```sh
+terraform apply -var use_localstack=false -var alert_email=you@example.com
+```
+Then enable drift detection: create an IAM role for GitHub OIDC with `ReadOnlyAccess` and read access to your state bucket, and set the repository variables `AWS_ROLE_ARN` and `TF_STATE_BUCKET` (optionally `TF_STATE_KEY`, `AWS_REGION`). The organization guardrails are a separate stack applied from the management account; see [`org/README.md`](org/README.md).
+
 ## Continuous integration
 [`.github/workflows/security.yml`](.github/workflows/security.yml) runs on every push and pull request:
-1. `terraform fmt -check` and `terraform validate` for both the hardened and vulnerable configs
-2. Scanner unit tests
-3. `scan.py .` must pass, and `scan.py vulnerable` must fail (this proves the scanner still detects every finding)
-4. Checkov on the hardened config
+1. `terraform fmt -check` and `terraform validate` for the hardened, `org` and vulnerable configs (provider checksums enforced)
+2. Scanner unit tests; `scan.py .` must pass and `scan.py vulnerable` must fail
+3. Rego unit tests; the OPA gate must pass on the hardened code and fail on the baseline
+4. Checkov on the hardened and `org` configs
+
+**Making the gates blocking:** in **Settings → Rules → Rulesets → (rule for `main`)**, enable **Require status checks to pass** and add the `terraform`, `scan`, `opa` and `checkov` checks. A pull request then cannot merge while any gate is red.
+
+[`.github/workflows/drift.yml`](.github/workflows/drift.yml) runs daily once a real deployment is connected (see above).
 
 ## Sources
 * NIST, [The NIST Cybersecurity Framework (CSF) 2.0](https://doi.org/10.6028/NIST.CSWP.29). Subcategory text is quoted from NIST's OSCAL catalog in [usnistgov/oscal-content](https://github.com/usnistgov/oscal-content/tree/main/nist.gov/CSF/v2.0).
 * NIST, [SP 800-53 Rev. 5](https://doi.org/10.6028/NIST.SP.800-53r5). Control titles are from the [official OSCAL catalog](https://github.com/usnistgov/oscal-content/tree/main/nist.gov/SP800-53/rev5).
 * NIST, [SP 800-30 Rev. 1, Guide for Conducting Risk Assessments](https://doi.org/10.6028/NIST.SP.800-30r1)
+* AWS, [Operational Best Practices conformance packs for NIST CSF and NIST 800-53 Rev. 5](https://github.com/awslabs/aws-config-rules/tree/master/aws-config-conformance-packs): source of the AWS Config rule identifiers.
+* [Open Policy Agent / conftest](https://github.com/open-policy-agent/conftest)
 * [Checkov](https://github.com/bridgecrewio/checkov). Check IDs in the report come from actual runs.
 * HashiCorp, [Terraform AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 
