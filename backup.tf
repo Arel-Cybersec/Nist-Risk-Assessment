@@ -3,7 +3,7 @@
 # copied to the DR region (dr.tf). AWS Backup restore testing then restores the latest point
 # every week and reports the result to the security alert topic, so "can we restore?" is
 # answered continuously instead of during an incident.
-# (RC.RP-03, PR.DS-11 intent; SP 800-53 CP-9, CP-4, CP-10)
+# (PR.DS-11, RC.RP-03; SP 800-53 CP-9, CP-4, CP-10)
 
 resource "aws_backup_vault" "main" {
   name        = "fintech-vault"
