@@ -70,7 +70,7 @@ resource "aws_config_configuration_recorder_status" "main" {
   depends_on = [aws_config_delivery_channel.main]
 }
 
-# AWS managed rules mirroring the risk register. Identifiers verified against AWS's
+# AWS managed rules mirroring the risk register (28 rules). Identifiers verified against AWS's
 # "Operational Best Practices for NIST CSF / NIST 800-53 rev 5" conformance packs
 # (github.com/awslabs/aws-config-rules).
 locals {
@@ -93,6 +93,16 @@ locals {
     "s3-tls-only"                = "S3_BUCKET_SSL_REQUESTS_ONLY"                # F-05
     "ec2-imdsv2"                 = "EC2_IMDSV2_CHECK"                           # F-06
     "guardduty-enabled"          = "GUARDDUTY_ENABLED_CENTRALIZED"              # F-07
+    "ebs-in-backup-plan"         = "EBS_IN_BACKUP_PLAN"                         # F-11
+    "backup-points-encrypted"    = "BACKUP_RECOVERY_POINT_ENCRYPTED"            # F-11
+    "s3-replication-enabled"     = "S3_BUCKET_REPLICATION_ENABLED"              # F-12
+    "acm-cert-expiration"        = "ACM_CERTIFICATE_EXPIRATION_CHECK"           # F-13
+    "elb-https-only"             = "ELB_TLS_HTTPS_LISTENERS_ONLY"               # F-13
+    "alb-drop-invalid-headers"   = "ALB_HTTP_DROP_INVALID_HEADER_ENABLED"       # F-13
+    "alb-waf-enabled"            = "ALB_WAF_ENABLED"                            # F-13
+    "elb-logging-enabled"        = "ELB_LOGGING_ENABLED"                        # F-13
+    "elb-deletion-protection"    = "ELB_DELETION_PROTECTION_ENABLED"            # F-13
+    "ec2-no-public-ip"           = "EC2_INSTANCE_NO_PUBLIC_IP"                  # F-13
   }
 }
 
@@ -120,9 +130,9 @@ resource "aws_sns_topic_policy" "security_alerts" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "AllowEventBridgeAndConfig"
+      Sid       = "AllowEventBridgeConfigAndBackup"
       Effect    = "Allow"
-      Principal = { Service = ["events.amazonaws.com", "config.amazonaws.com"] }
+      Principal = { Service = ["events.amazonaws.com", "config.amazonaws.com", "backup.amazonaws.com"] }
       Action    = "sns:Publish"
       Resource  = aws_sns_topic.security_alerts.arn
       Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }

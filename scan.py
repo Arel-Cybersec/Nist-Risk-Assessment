@@ -1,4 +1,4 @@
-"""Policy-as-code scanner for the risk register findings F-01 … F-09.
+"""Policy-as-code scanner for the risk register findings F-01 … F-13 (F-10 is a process control).
 
 Checks the *.tf files in each given directory (not recursive) and exits 1 if any
 CRITICAL or HIGH finding is present, so it can gate a CI pipeline.
@@ -193,9 +193,11 @@ def scan(directory):
         # F-04 Missing audit logging
         if t == "aws_vpc" and not referenced("aws_flow_log", r, "vpc_id"):
             add("F-04", "MEDIUM", r, "VPC has no flow logs")
-        if t == "aws_s3_bucket" and not referenced("aws_s3_bucket_logging", r) \
-                and not referenced("aws_s3_bucket_logging", r, "target_bucket"):  # log targets are exempt
-            add("F-04", "MEDIUM", r, "S3 bucket has no server access logging")
+        # Object access is logged by S3 server access logs or by CloudTrail data events; log targets are exempt
+        trail_logged = any(f'aws_s3_bucket.{r["name"]}.arn' in tr["body"] for tr in by_type.get("aws_cloudtrail", []))
+        if t == "aws_s3_bucket" and not trail_logged and not referenced("aws_s3_bucket_logging", r) \
+                and not referenced("aws_s3_bucket_logging", r, "target_bucket"):
+            add("F-04", "MEDIUM", r, "S3 bucket access is not logged (no server access logs or CloudTrail data events)")
 
         # F-05 Network exposure (inline ingress blocks and standalone rule resources)
         ingress_rules = []
@@ -218,6 +220,20 @@ def scan(directory):
             if attr(meta, "http_tokens") != "required":
                 add("F-06", "HIGH", r, "IMDSv1 allowed; set metadata_options.http_tokens = \"required\"")
 
+        # F-13 Managed TLS: no plaintext or weak listeners, no instance directly on the internet
+        if t == "aws_lb_listener":
+            proto = attr(b, "protocol")
+            if proto == "HTTP" and not re.search(r'type\s*=\s*"redirect"', b):
+                add("F-13", "HIGH", r, "Plaintext HTTP listener that does not redirect to HTTPS")
+            if proto == "HTTPS" and not re.match(r"ELBSecurityPolicy-(TLS13|TLS-1-2)", attr(b, "ssl_policy") or ""):
+                add("F-13", "HIGH", r, "HTTPS listener allows TLS below 1.2 (set a TLS13 or TLS-1-2 ssl_policy)")
+        if t == "aws_instance":
+            subnet = re.match(r"aws_subnet\.([\w-]+)\.", attr(b, "subnet_id") or "")
+            public_subnet = subnet and any(s["name"] == subnet.group(1) and attr(s["body"], "map_public_ip_on_launch") == "true"
+                                           for s in by_type.get("aws_subnet", []))
+            if attr(b, "associate_public_ip_address") == "true" or public_subnet:
+                add("F-13", "MEDIUM", r, "Instance gets a public IP; serve it through a TLS load balancer instead")
+
         # F-08 Preventive guardrails: roles people can assume need a permissions boundary
         if t == "aws_iam_role" and re.search(r"Principal\s*=\s*\{\s*AWS", b) \
                 and not re.search(r"\bpermissions_boundary\s*=", b):
@@ -235,6 +251,12 @@ def scan(directory):
             missing("F-07", "HIGH", "No enabled GuardDuty detector (no runtime threat detection)")
         if not by_type.get("aws_config_configuration_recorder"):
             missing("F-07", "HIGH", "No AWS Config recorder (configuration drift is not monitored)")
+        if not by_type.get("aws_backup_plan"):
+            missing("F-11", "HIGH", "No AWS Backup plan (no point-in-time recovery for instance data)")
+        elif not by_type.get("aws_backup_restore_testing_plan"):
+            missing("F-11", "MEDIUM", "Backups are never test-restored (no restore testing plan)")
+        if by_type.get("aws_s3_bucket") and not by_type.get("aws_s3_bucket_replication_configuration"):
+            missing("F-12", "MEDIUM", "Data is held in a single region (no S3 replication configuration)")
         if not (Path(directory) / ".terraform.lock.hcl").is_file():
             missing("F-09", "MEDIUM", "No .terraform.lock.hcl (provider checksums are not pinned)")
 
