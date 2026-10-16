@@ -1,0 +1,55 @@
+name: security
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [".", "vulnerable"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: Format
+        run: terraform fmt -check -recursive
+        working-directory: ${{ matrix.dir }}
+      - name: Validate
+        run: terraform init -backend=false -input=false && terraform validate
+        working-directory: ${{ matrix.dir }}
+
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest -v
+      - name: Policy scan (hardened config must pass)
+        run: python scan.py .
+      - name: Policy scan (vulnerable baseline must fail)
+        run: |
+          if python scan.py vulnerable; then
+            echo "::error::scan.py did not flag the vulnerable baseline"
+            exit 1
+          fi
+
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install checkov==3.3.29
+      - name: Checkov (hardened config)
+        run: checkov -d . --framework terraform --skip-path vulnerable --compact
