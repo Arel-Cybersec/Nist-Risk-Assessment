@@ -89,3 +89,11 @@ resource "aws_instance" "app_server" {
     Environment = "Production"
   }
 }
+
+# Stable public address for HTTPS clients and outbound SSM/AWS API traffic.
+# Production would front this with a load balancer and keep the instance private.
+resource "aws_eip" "app" {
+  domain     = "vpc"
+  instance   = aws_instance.app_server.id
+  depends_on = [aws_internet_gateway.igw]
+}

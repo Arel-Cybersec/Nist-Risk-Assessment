@@ -20,8 +20,9 @@ resource "aws_kms_key" "data" {
         Sid       = "AllowCloudTrailEncrypt"
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
-        Action    = ["kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:GenerateDataKey*", "kms:Decrypt", "kms:DescribeKey"]
         Resource  = "*"
+        Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
       },
       {
         Sid       = "AllowCloudWatchLogs"
@@ -195,6 +196,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
     }
     expiration {
       days = var.log_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 30
     }
     abort_incomplete_multipart_upload {
       days_after_initiation = 7

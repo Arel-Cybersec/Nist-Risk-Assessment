@@ -53,7 +53,7 @@ checkov -d . --framework terraform --skip-path vulnerable
 | Tool | Vulnerable baseline | Hardened |
 |------|---------------------|----------|
 | `scan.py` | 15 findings | 0 |
-| Checkov 3.3.29 | 14 passed / **33 failed** | 111 passed / **0 failed** / 6 skipped* |
+| Checkov 3.3.29 | 14 passed / **33 failed** | 123 passed / **0 failed** / 6 skipped* |
 
 \* Each skip has a justification in source (`#checkov:skip=…`), e.g. cross-region replication is out of scope, and the log bucket can't log to itself.
 

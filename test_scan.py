@@ -58,6 +58,33 @@ resource "aws_security_group" "x" {
 }''')
         self.assertIn(("F-05", "CRITICAL", "Management port (22/3389) open to the internet"), hits)
 
+    def test_standalone_ingress_rules_are_checked(self):
+        tf = '''
+resource "aws_security_group_rule" "ssh" {
+  type        = "ingress"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}
+resource "aws_vpc_security_group_ingress_rule" "rdp" {
+  from_port   = 3389
+  to_port     = 3389
+  ip_protocol = "tcp"
+  cidr_ipv4   = "0.0.0.0/0"
+}
+resource "aws_security_group_rule" "egress_ok" {
+  type        = "egress"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}'''
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "t.tf").write_text(tf)
+            flagged = sorted(f["resource"] for f in scan.scan(d) if f["id"] == "F-05")
+        self.assertEqual(flagged, ["aws_security_group_rule.ssh", "aws_vpc_security_group_ingress_rule.rdp"])
+
     def test_commented_out_code_is_ignored(self):
         self.assertEqual(scan_text('# resource "aws_iam_user" "u" { name = "x" }\n'), set())
 

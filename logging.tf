@@ -45,6 +45,22 @@ resource "aws_sns_topic" "cloudtrail" {
   kms_master_key_id = aws_kms_key.data.id
 }
 
+resource "aws_sns_topic_policy" "cloudtrail" {
+  arn = aws_sns_topic.cloudtrail.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AllowCloudTrailPublish"
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+      Action    = "sns:Publish"
+      Resource  = aws_sns_topic.cloudtrail.arn
+      Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
+    }]
+  })
+}
+
 resource "aws_cloudtrail" "main" {
   name                          = "fintech-audit-trail"
   s3_bucket_name                = aws_s3_bucket.audit_logs.id
@@ -68,7 +84,7 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
-  depends_on = [aws_s3_bucket_policy.audit_logs]
+  depends_on = [aws_s3_bucket_policy.audit_logs, aws_sns_topic_policy.cloudtrail]
 }
 
 # ── VPC Flow Logs ────────────────────────────────────────────────────

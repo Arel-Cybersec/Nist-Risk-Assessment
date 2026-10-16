@@ -5,6 +5,9 @@ CRITICAL or HIGH finding is present, so it can gate a CI pipeline.
 
     python3 scan.py [DIR ...] [--json]
 
+Limitations: policies built with the aws_iam_policy_document data source or
+inline_policy blocks, and heredoc strings, are not parsed.
+
 Standard library only. It understands Terraform's block structure (braces), so a
 rule looks at one resource, one ingress block or one policy statement at a time
 instead of matching single lines. It complements Checkov: Checkov checks each
@@ -122,7 +125,7 @@ def policy_statements(body):
 
 
 def port_range_covers(block, port):
-    if attr(block, "protocol") in ("-1", "all"):
+    if (attr(block, "protocol") or attr(block, "ip_protocol")) in ("-1", "all"):
         return True
     lo, hi = attr(block, "from_port"), attr(block, "to_port")
     try:
@@ -194,9 +197,14 @@ def scan(directory):
                 and not referenced("aws_s3_bucket_logging", r, "target_bucket"):  # log targets are exempt
             add("F-04", "MEDIUM", r, "S3 bucket has no server access logging")
 
-        # F-05 Network exposure
+        # F-05 Network exposure (inline ingress blocks and standalone rule resources)
+        ingress_rules = []
         if t == "aws_security_group":
-            for ing in sub_blocks(b, "ingress"):
+            ingress_rules = list(sub_blocks(b, "ingress"))
+        elif t == "aws_vpc_security_group_ingress_rule" or (t == "aws_security_group_rule" and attr(b, "type") == "ingress"):
+            ingress_rules = [b]
+        if ingress_rules:
+            for ing in ingress_rules:
                 if not any(c in ing for c in OPEN_CIDRS):
                     continue
                 if any(port_range_covers(ing, p) for p in (22, 3389)):

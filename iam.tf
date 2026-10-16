@@ -18,6 +18,21 @@ resource "aws_iam_role_policy_attachment" "app_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Objects are SSE-KMS encrypted, so reading and writing them needs the data key
+resource "aws_iam_role_policy" "app_data_key" {
+  name = "UseDataKey"
+  role = aws_iam_role.app_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+      Resource = aws_kms_key.data.arn
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "app" {
   name = "FinTechCoreAppProfile"
   role = aws_iam_role.app_role.name
