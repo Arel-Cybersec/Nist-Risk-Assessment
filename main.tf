@@ -16,10 +16,26 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.fintech_vpc.id
 }
 
-# Public Subnet for our API/Web Tier (no automatic public IPs)
+# ── Subnets ──────────────────────────────────────────────────────────
+# Public subnets hold only the load balancer (two AZs, as ALBs require). The application
+# instance lives in a private subnet with no route to the internet (F-13).
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.fintech_vpc.id
   cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
+  map_public_ip_on_launch = false
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.fintech_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.region}b"
+  map_public_ip_on_launch = false
+}
+
+resource "aws_subnet" "private_app" {
+  vpc_id                  = aws_vpc.fintech_vpc.id
+  cidr_block              = "10.0.10.0/24"
   availability_zone       = "${var.region}a"
   map_public_ip_on_launch = false
 }
@@ -38,39 +54,99 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# REMEDIATION F-05: No management ports at all. Admin access is via SSM Session Manager.
-# Only HTTPS is exposed; plaintext HTTP is removed.
+resource "aws_route_table_association" "public_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+# No default route: the private subnet reaches AWS only through VPC endpoints
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.fintech_vpc.id
+}
+
+resource "aws_route_table_association" "private_app" {
+  subnet_id      = aws_subnet.private_app.id
+  route_table_id = aws_route_table.private.id
+}
+
+# ── VPC endpoints: SSM and S3 without internet access ────────────────
+resource "aws_security_group" "endpoints" {
+  name        = "vpc-endpoints-sg"
+  description = "Interface endpoints for SSM, reachable only from the app instance"
+  vpc_id      = aws_vpc.fintech_vpc.id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "endpoints_from_app" {
+  security_group_id            = aws_security_group.endpoints.id
+  description                  = "HTTPS from the application instance"
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  referenced_security_group_id = aws_security_group.secure_sg.id
+}
+
+resource "aws_vpc_endpoint" "ssm" {
+  for_each            = toset(["ssm", "ssmmessages", "ec2messages"])
+  vpc_id              = aws_vpc.fintech_vpc.id
+  service_name        = "com.amazonaws.${var.region}.${each.key}"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  subnet_ids          = [aws_subnet.private_app.id]
+  security_group_ids  = [aws_security_group.endpoints.id]
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.fintech_vpc.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+}
+
+# REMEDIATION F-05 / F-13: No management ports and no direct internet exposure. The instance
+# accepts HTTPS only from the load balancer; admin access is via SSM Session Manager.
 resource "aws_security_group" "secure_sg" {
   name        = "secure-api-sg"
   description = "Hardened security group for FinTech web instances"
   vpc_id      = aws_vpc.fintech_vpc.id
+}
 
-  ingress {
-    description = "Public HTTPS for the web application"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
+  security_group_id            = aws_security_group.secure_sg.id
+  description                  = "HTTPS from the load balancer only"
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  referenced_security_group_id = aws_security_group.alb.id
+}
 
-  egress {
-    description = "HTTPS out for SSM, package updates and AWS APIs"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_vpc_security_group_egress_rule" "app_to_endpoints" {
+  security_group_id            = aws_security_group.secure_sg.id
+  description                  = "HTTPS to the SSM interface endpoints"
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  referenced_security_group_id = aws_security_group.endpoints.id
+}
+
+resource "aws_vpc_security_group_egress_rule" "app_to_s3" {
+  security_group_id = aws_security_group.secure_sg.id
+  description       = "HTTPS to S3 through the gateway endpoint"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  prefix_list_id    = aws_vpc_endpoint.s3.prefix_list_id
 }
 
 # REMEDIATION F-06: Hardened application instance
 resource "aws_instance" "app_server" {
-  ami                    = var.app_ami_id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.secure_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.app.name
-  monitoring             = true
-  ebs_optimized          = true
+  ami                         = var.app_ami_id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.private_app.id
+  associate_public_ip_address = false
+  vpc_security_group_ids      = [aws_security_group.secure_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.app.name
+  monitoring                  = true
+  ebs_optimized               = true
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -97,12 +173,4 @@ resource "aws_security_group" "isolation" {
   name        = "isolation-sg"
   description = "Incident response: no inbound or outbound traffic"
   vpc_id      = aws_vpc.fintech_vpc.id
-}
-
-# Stable public address for HTTPS clients and outbound SSM/AWS API traffic.
-# Production would front this with a load balancer and keep the instance private.
-resource "aws_eip" "app" {
-  domain     = "vpc"
-  instance   = aws_instance.app_server.id
-  depends_on = [aws_internet_gateway.igw]
 }
